@@ -1,0 +1,38 @@
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local databases
+*.db
+*.sqlite
+
+# Environment variables
+.env
+
+# Local execution scripts
+start_ngrok.bat
+
+# VS Code and IDE settings
+.vscode/
+.idea/
+
+# pyenv
+.python-version
+
+# Distribution/build files
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
