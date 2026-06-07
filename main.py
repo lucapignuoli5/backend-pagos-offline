@@ -1,6 +1,7 @@
 from typing import Annotated
 import base64
 import binascii
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from hashlib import sha256
 from html import escape
@@ -18,15 +19,47 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from crypto_utils import verify_payment_contract_signature
-from database import Base, engine, get_db
+from database import Base, SessionLocal, engine, get_db
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = SessionLocal()
+    try:
+        comercio = db.get(models.User, 1)
+        if comercio is None:
+            comercio = models.User(
+                id=1,
+                nombre="Comercio de Prueba",
+                saldo_real=Decimal("0"),
+            )
+            db.add(comercio)
+
+        cliente = (
+            db.query(models.User)
+            .filter(func.lower(models.User.nombre) == "user-qr")
+            .first()
+        )
+        if cliente is None:
+            cliente = models.User(
+                nombre="USER-QR",
+                saldo_real=Decimal("100000.00"),
+            )
+            db.add(cliente)
+
+        db.commit()
+        yield
+    finally:
+        db.close()
+
+
 app = FastAPI(
     title="Backend Pagos Offline",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -509,18 +542,20 @@ if __name__ == "__main__":
     import uvicorn
     from pyngrok import ngrok
 
-    # 1. Abrir el túnel hacia internet en el puerto 8000 con dominio estático
+    # 1. Configurar el token de seguridad
+    ngrok.set_auth_token("2iaQVrqVAFfeumyIpp5fx3iqvaj_6GhFuY51acviSoqdyCY8H")
+
+    # 2. Abrir el túnel hacia internet (Sintaxis corregida)
     puerto = 8000
     public_url = ngrok.connect(
         puerto,
-        "http",
-        options={"domain": "unfailing-bless-thrift.ngrok-free.dev"},
+        domain="unfailing-bless-thrift.ngrok-free.dev"
     )
 
-    # 2. Imprimir la URL segura generada
+    # 3. Imprimir la URL segura generada
     print("=" * 55)
     print(f"🌐 URL PÚBLICA PARA ANDROID (HTTPS): {public_url.public_url}/")
     print("=" * 55)
 
-    # 3. Arrancar el servidor Uvicorn
+    # 4. Arrancar el servidor Uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=puerto, reload=True)
