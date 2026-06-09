@@ -5,3 +5,6 @@ pydantic
 ecdsa
 pyngrok
 cryptography
+passlib[bcrypt]
+bcrypt==4.1.2
+python-jose[cryptography]

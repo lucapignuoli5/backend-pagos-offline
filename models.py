@@ -13,6 +13,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     saldo_real: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
 
     offline_tokens: Mapped[list["OfflineToken"]] = relationship(
         back_populates="user",

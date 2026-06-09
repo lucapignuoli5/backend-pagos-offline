@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class UserBase(BaseModel):
@@ -78,3 +78,21 @@ class OfflinePaymentSyncResponse(BaseModel):
     exitosas: int
     fallidas: int
     resultados: list[OfflinePaymentSyncResult]
+
+
+class LoginRequest(BaseModel):
+    usuario: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    token_id: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    password: str = Field(..., min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def validar_identificador(self):
+        if not self.usuario and not self.token_id:
+            raise ValueError("Debe enviar usuario o token_id")
+        return self
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 3600

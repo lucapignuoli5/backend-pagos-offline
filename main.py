@@ -2,19 +2,22 @@ from typing import Annotated
 import base64
 import binascii
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
 from html import escape
+import os
 import re
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 import models
 import schemas
@@ -23,12 +26,36 @@ from database import Base, SessionLocal, engine, get_db
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
+from jose import jwt
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BRUTE_FORCE_ATTEMPTS: dict[str, int] = {}
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-change-me")
+JWT_ALGORITHM = "HS256"
+MAX_LOGIN_ATTEMPTS = 5
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def _ensure_password_hash_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "password_hash" not in columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE users ADD COLUMN password_hash VARCHAR")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
+        _ensure_password_hash_column()
         comercio = db.get(models.User, 1)
         if comercio is None:
             comercio = models.User(
@@ -40,15 +67,18 @@ async def lifespan(app: FastAPI):
 
         cliente = (
             db.query(models.User)
-            .filter(func.lower(models.User.nombre) == "user-qr")
+            .filter(func.lower(models.User.nombre) == "token-user-qr")
             .first()
         )
         if cliente is None:
             cliente = models.User(
-                nombre="USER-QR",
+                nombre="TOKEN-USER-QR",
                 saldo_real=Decimal("100000.00"),
+                password_hash=hash_password("123456"),
             )
             db.add(cliente)
+        elif not cliente.password_hash:
+            cliente.password_hash = hash_password("123456")
 
         db.commit()
         yield
@@ -57,7 +87,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Backend Pagos Offline",
+    title="Backend de Administración",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -79,6 +109,50 @@ async def validation_exception_handler(request, exc):
 Base.metadata.create_all(bind=engine)
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+@app.post("/api/login", response_model=schemas.LoginResponse)
+def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession) -> dict[str, object]:
+    client_ip = request.client.host if request.client else "unknown"
+    fallos = BRUTE_FORCE_ATTEMPTS.get(client_ip, 0)
+
+    if fallos >= MAX_LOGIN_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Demasiados intentos fallidos")
+
+    identificador = payload.usuario or payload.token_id or ""
+    usuario = None
+
+    if identificador.isdigit():
+        usuario = db.get(models.User, int(identificador))
+    else:
+        usuario = (
+            db.query(models.User)
+            .filter(func.lower(models.User.nombre) == identificador.lower())
+            .first()
+        )
+
+    if usuario is None or not usuario.password_hash or not verify_password(payload.password, usuario.password_hash):
+        BRUTE_FORCE_ATTEMPTS[client_ip] = fallos + 1
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+
+    BRUTE_FORCE_ATTEMPTS.pop(client_ip, None)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    token = jwt.encode(
+        {
+            "sub": str(usuario.id),
+            "token_id": str(usuario.id),
+            "exp": int(expires_at.timestamp()),
+        },
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 3600,
+    }
 
 
 @app.post(
@@ -148,16 +222,16 @@ def dashboard(db: DbSession) -> HTMLResponse:
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="refresh" content="5">
-        <title>Dashboard de Sincronizacion - Piacere Caffe</title>
+        <title>Dashboard Principal - Sincronización de Transacciones</title>
         <script src="https://cdn.tailwindcss.com"></script>
       </head>
       <body class="min-h-screen bg-stone-100 text-slate-900">
         <main class="mx-auto w-full max-w-6xl px-5 py-8">
           <header class="mb-8 flex flex-col gap-4 border-b border-stone-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">Piacere Caffe</p>
+              <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">Sistema de Administración</p>
               <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-                Dashboard de Sincronizacion - Piacere Caffe
+                Dashboard Principal - Sincronización de Transacciones
               </h1>
             </div>
             <div class="text-sm text-slate-600">Actualizacion automatica cada 5 segundos</div>
@@ -165,7 +239,7 @@ def dashboard(db: DbSession) -> HTMLResponse:
 
           <section class="mb-8 grid gap-4 sm:grid-cols-3">
             <div class="rounded-lg border border-stone-300 bg-white p-5 shadow-sm">
-              <p class="text-sm font-medium text-slate-500">Total Recaudado Offline</p>
+              <p class="text-sm font-medium text-slate-500">Total Recaudado</p>
               <p class="mt-2 text-3xl font-bold text-emerald-700">${total_recaudado:,.2f}</p>
             </div>
             <div class="rounded-lg border border-stone-300 bg-white p-5 shadow-sm">
