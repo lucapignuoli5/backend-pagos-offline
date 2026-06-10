@@ -295,13 +295,15 @@ def sync_offline_payments(
     resultados: list[schemas.OfflinePaymentSyncResult] = []
 
     for transaccion in transacciones:
-        if _transaccion_offline_ya_sincronizada(transaccion.id_transaccion, db):
-            print(f"Log: Transaccion {transaccion.id_transaccion} ignorada (Duplicada)")
+        if _transaccion_ya_existe(transaccion.id_transaccion, db):
+            print(
+                f"Seguridad: transaccion duplicada detectada para {transaccion.id_transaccion}"
+            )
             resultados.append(
                 schemas.OfflinePaymentSyncResult(
                     id_transaccion=transaccion.id_transaccion,
-                    exitoso=True,
-                    motivo="Duplicada ignorada",
+                    exitoso=False,
+                    motivo="Transacción duplicada detectada (Replay Attack Mitigation)",
                 )
             )
             continue
