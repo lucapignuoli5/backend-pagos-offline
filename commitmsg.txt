@@ -1,0 +1,5 @@
+﻿chore(api): preparación de esquemas para sincronización offline-first
+
+- Definición de modelos de datos para la recepción de transacciones diferidas.
+- Configuración base para integración con túneles de desarrollo (Ngrok).
+- Estructuración de endpoints para futura validación de firmas criptográficas ECDSA.
