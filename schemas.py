@@ -58,7 +58,7 @@ class SignatureVerificationResponse(BaseModel):
 
 class OfflinePaymentSyncItem(BaseModel):
     id_transaccion: str = Field(..., min_length=1, max_length=120)
-    monto: float = Field(..., description="Monto informado por Android")
+    monto: int = Field(..., description="Monto en centavos informado por Android")
     timestamp: Union[int, str]
     comercio_id: int = Field(..., gt=0)
     firma: str = Field(..., min_length=1)
@@ -96,3 +96,18 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 3600
+
+
+class RecargaRequest(BaseModel):
+    token_id: str = Field(..., min_length=1)
+    monto_recarga: float = Field(..., gt=0)
+
+
+class RecargaResponse(BaseModel):
+    exitoso: bool
+    nuevo_saldo: float
+
+
+class LinkPagoRequest(BaseModel):
+    token_id: str = Field(..., min_length=1)
+    monto: float = Field(..., gt=0)

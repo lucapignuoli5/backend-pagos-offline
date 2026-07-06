@@ -1,58 +1,30 @@
 import base64
-import binascii
-from hashlib import sha256
-
-from ecdsa import BadSignatureError, NIST256p, SECP256k1, VerifyingKey
-from ecdsa.util import sigdecode_der, sigdecode_string
-
-
-SUPPORTED_CURVES = (SECP256k1, NIST256p)
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.exceptions import InvalidSignature
 
 
 def verify_payment_contract_signature(
-    contract_json: str,
-    signature: str,
-    public_key_pem: str,
+    payload_str: str,
+    signature_b64: str,
+    public_key_b64: str,
 ) -> bool:
     try:
-        public_key = VerifyingKey.from_pem(public_key_pem)
-    except ValueError:
+        # 1. Decodificar la clave pública de Base64 a bytes (DER)
+        pub_key_bytes = base64.b64decode(public_key_b64)
+        public_key = serialization.load_der_public_key(pub_key_bytes)
+
+        # 2. Decodificar la firma de Base64 a bytes
+        signature_bytes = base64.b64decode(signature_b64)
+
+        # 3. Verificar la firma usando SHA256 y curva elíptica ECDSA
+        public_key.verify(
+            signature_bytes,
+            payload_str.encode('utf-8'),
+            ec.ECDSA(hashes.SHA256())
+        )
+        return True
+        
+    except (InvalidSignature, ValueError, TypeError) as e:
+        print(f"Error de verificación criptográfica: {e}")
         return False
-
-    if public_key.curve not in SUPPORTED_CURVES:
-        return False
-
-    try:
-        signature_bytes = _decode_signature(signature)
-    except ValueError:
-        return False
-
-    payload = contract_json.encode("utf-8")
-
-    for decoder in (sigdecode_der, sigdecode_string):
-        try:
-            if public_key.verify(
-                signature_bytes,
-                payload,
-                hashfunc=sha256,
-                sigdecode=decoder,
-            ):
-                return True
-        except (BadSignatureError, ValueError):
-            continue
-
-    return False
-
-
-def _decode_signature(signature: str) -> bytes:
-    normalized_signature = signature.strip()
-
-    try:
-        return bytes.fromhex(normalized_signature)
-    except ValueError:
-        pass
-
-    try:
-        return base64.b64decode(normalized_signature, validate=True)
-    except binascii.Error as exc:
-        raise ValueError("La firma debe estar codificada en hexadecimal o Base64") from exc

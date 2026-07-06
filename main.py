@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import base64
 import binascii
 from contextlib import asynccontextmanager
@@ -9,15 +9,17 @@ from html import escape
 import os
 import re
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding, utils
+from cryptography.exceptions import InvalidSignature
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
+import mercadopago
 
 import models
 import schemas
@@ -29,8 +31,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from jose import jwt
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+mp_sdk = mercadopago.SDK("APP_USR-2595951267889831-061118-db149f1a52dab634ab15ed41166028d3-3468654848")
+
 BRUTE_FORCE_ATTEMPTS: dict[str, int] = {}
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-change-me")
+if JWT_SECRET_KEY == "dev-change-me":
+    print("⚠️  [SECURITY WARNING]: JWT_SECRET_KEY es 'dev-change-me'. Peligro de falsificación de tokens. NUNCA usar en producción sin variables de entorno.")
 JWT_ALGORITHM = "HS256"
 MAX_LOGIN_ATTEMPTS = 5
 
@@ -41,6 +47,25 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def _get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> models.User:
+    if authorization is None or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+    user_id = payload.get("sub")
+    if user_id is None or not str(user_id).isdigit():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+    usuario = db.get(models.User, int(user_id))
+    if usuario is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
+    return usuario
 
 
 def _ensure_password_hash_column() -> None:
@@ -180,6 +205,89 @@ def consultar_saldo(user_id: int, db: DbSession) -> models.User:
             detail="Usuario no encontrado",
         )
     return usuario
+
+
+@app.get("/api/billetera/saldo", tags=["billetera"])
+def consultar_saldo_actual(usuario: models.User = Depends(_get_current_user)) -> dict[str, object]:
+    return {"saldo_real": float(usuario.saldo_real)}
+
+
+@app.post(
+    "/api/billetera/recargar",
+    response_model=schemas.RecargaResponse,
+)
+def recargar_saldo(payload: schemas.RecargaRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    cliente = (
+        db.query(models.User)
+        .filter(func.lower(models.User.nombre) == payload.token_id.lower())
+        .first()
+    )
+
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+
+    monto_decimal = Decimal(str(payload.monto_recarga))
+    cliente.saldo_real += monto_decimal
+    db.commit()
+    db.refresh(cliente)
+
+    return {
+        "exitoso": True,
+        "nuevo_saldo": float(cliente.saldo_real),
+    }
+
+
+@app.post("/api/billetera/crear-link-pago")
+def crear_link(payload: schemas.LinkPagoRequest) -> dict:
+    preference_data = {
+        "items": [
+            {
+                "title": "Recarga Billetera Offline",
+                "quantity": 1,
+                "currency_id": "ARS",
+                "unit_price": payload.monto,
+            }
+        ],
+        "external_reference": payload.token_id,
+        "notification_url": "https://unfailing-bless-thrift.ngrok-free.dev/webhook/mercadopago",
+    }
+
+    preference_response = mp_sdk.preference().create(preference_data)
+
+    if preference_response["status"] == 201:
+        return {"init_point": preference_response["response"]["init_point"]}
+    else:
+        raise HTTPException(status_code=400, detail="Error al crear link de MP")
+
+
+@app.post("/webhook/mercadopago")
+async def mp_webhook(request: Request, db: DbSession):
+    body = await request.json()
+    topic = request.query_params.get("topic") or body.get("type") or body.get("action")
+    payment_id = request.query_params.get("id") or body.get("data", {}).get("id")
+
+    if topic in ["payment", "payment.created", "payment.updated"] and payment_id:
+        payment_info = mp_sdk.payment().get(payment_id)
+
+        if payment_info["status"] == 200:
+            payment = payment_info["response"]
+
+            if payment["status"] == "approved":
+                external_ref = payment.get("external_reference")
+                monto = Decimal(str(payment.get("transaction_amount")))
+
+                if external_ref:
+                    cliente = (
+                        db.query(models.User)
+                        .filter(func.lower(models.User.nombre) == external_ref.lower())
+                        .first()
+                    )
+                    if cliente:
+                        cliente.saldo_real += monto
+                        db.commit()
+                        print(f"✅ WEBHOOK MP: Se sumaron ${monto} a {cliente.nombre}")
+
+    return {"status": "ok"}
 
 
 @app.post("/verify-signature", response_model=schemas.SignatureVerificationResponse)
@@ -428,16 +536,16 @@ def _render_fila_dashboard(transaccion: models.TransaccionOfflineDB) -> str:
 
 
 def _validar_firma_criptografica(transaccion: schemas.OfflinePaymentSyncItem) -> None:
-    datos_originales = _payload_firmado(transaccion)
-    print(f"DEBUG BACKEND - String a verificar: '{datos_originales}'")
+    payload_str = transaccion.payload_original or _payload_firmado(transaccion)
+    print(f"DEBUG BACKEND - String a verificar: '{payload_str}'")
     print(
         "DEBUG BACKEND - SHA256 string UTF-8: "
-        f"{sha256(datos_originales.encode('utf-8')).hexdigest()}"
+        f"{sha256(payload_str.encode('utf-8')).hexdigest()}"
     )
-    if not verificar_firma(
-        transaccion.clave_publica,
-        transaccion.firma,
-        datos_originales,
+    if not verify_payment_contract_signature(
+        payload_str=payload_str,
+        signature_b64=transaccion.firma,
+        public_key_b64=transaccion.clave_publica,
     ):
         print(
             "ADVERTENCIA: firma criptografica invalida para "
@@ -611,7 +719,8 @@ def _buscar_token_offline(
 
 
 def _payload_firmado(transaccion: schemas.OfflinePaymentSyncItem) -> str:
-    return f"{transaccion.id_transaccion}|{float(transaccion.monto):.1f}|{transaccion.timestamp}"
+    # Se usa el monto como entero (centavos) para prevenir errores criptograficos por el Locale del sistema
+    return f"{transaccion.id_transaccion}|{int(transaccion.monto)}|{transaccion.timestamp}"
 
 
 if __name__ == "__main__":
@@ -623,10 +732,27 @@ if __name__ == "__main__":
 
     # 2. Abrir el túnel hacia internet (Sintaxis corregida)
     puerto = 8000
-    public_url = ngrok.connect(
-        puerto,
-        domain="unfailing-bless-thrift.ngrok-free.dev"
-    )
+    try:
+        public_url = ngrok.connect(
+            puerto,
+            domain="unfailing-bless-thrift.ngrok-free.dev"
+        )
+    except Exception as exc:
+        print("Advertencia al abrir túnel ngrok:", exc)
+        # Intentar desconectar cualquier túnel existente con ese dominio y reintentar
+        try:
+            tunnels = ngrok.get_tunnels()
+            for t in tunnels:
+                if getattr(t, "public_url", "").startswith("https://unfailing-bless-thrift.ngrok-free.dev"):
+                    try:
+                        print(f"Desconectando túnel existente {t.public_url}")
+                        ngrok.disconnect(t.public_url)
+                    except Exception as e2:
+                        print(f"No se pudo desconectar el túnel existente: {e2}")
+            public_url = ngrok.connect(puerto, domain="unfailing-bless-thrift.ngrok-free.dev")
+        except Exception as exc2:
+            print("Reintento de ngrok falló, conectando sin dominio específico:", exc2)
+            public_url = ngrok.connect(puerto)
 
     # 3. Imprimir la URL segura generada
     print("=" * 55)
