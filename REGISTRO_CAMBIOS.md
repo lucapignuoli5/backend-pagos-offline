@@ -17,3 +17,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** este commit todavía no implementa autenticación v2, contabilidad atómica ni el POS.
 - **Commit:** `chore(baseline): [TFG-F0-BE-01] registrar linea base segura`
 - **Impacto académico:** permite distinguir el código heredado auditado de las correcciones posteriores.
+
+## TFG-F1-BE-01 — Contrato criptográfico y transporte NFC v2
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** Android, POS y backend necesitan una representación firmada única, sin flotantes ni reconstrucciones ambiguas, y un transporte APDU repetible.
+- **Comportamiento anterior:** el backend verificaba cadenas heredadas sin una especificación versionada compartida ni reglas completas de validación y fragmentación.
+- **Comportamiento nuevo:** una especificación v2 única define campos exactos, JSON canónico, firmas ECDSA P-256/SHA-256, huellas de claves, límites, mensajes y framing APDU de 160 bytes hasta 4 KiB.
+- **Decisión:** definir primero el contrato canónico y sus vectores en Python para que Android y el futuro POS consuman la misma especificación.
+- **Archivos:** `protocol_v2.py`, `docs/protocol_v2.md`, `tests/test_protocol_v2.py`, `tests/fixtures/protocol_v2_vectors.json`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** contrato de solicitud, comprobante y acuse v2; framing APDU v2.
+- **Pruebas:** 6 pruebas unitarias cubren vector canónico y firma fija, alteración de cada campo, importes inválidos, campos extra, JSON no canónico, fragmentación y exceso de 4 KiB; análisis sintáctico y `git diff --check` correctos.
+- **Limitaciones:** la interoperabilidad con Kotlin y hardware se registra por separado; el registro y autorización de claves se implementan en la Fase 2.
+- **Commit:** `feat(protocol): [TFG-F1-BE-01] definir contrato criptografico v2`
+- **Impacto académico:** formaliza qué datos se autentican y cómo se intercambian en los dos acercamientos NFC.

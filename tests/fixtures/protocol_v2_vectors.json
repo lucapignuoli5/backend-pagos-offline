@@ -1,0 +1,19 @@
+{
+  "request": {
+    "version": 2,
+    "type": "payment_request",
+    "operation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "merchant_id": "merchant-demo-001",
+    "terminal_id": "terminal-demo-001",
+    "amount_cents": 12345,
+    "currency": "ARS",
+    "nonce": "AAECAwQFBgcICQoLDA0ODw",
+    "issued_at": "2026-10-13T15:00:00Z",
+    "expires_at": "2026-10-13T15:02:00Z",
+    "pos_key_id": "pos-key-demo-001",
+    "pos_key_fingerprint": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+  },
+  "canonical_request": "{\"amount_cents\":12345,\"currency\":\"ARS\",\"expires_at\":\"2026-10-13T15:02:00Z\",\"issued_at\":\"2026-10-13T15:00:00Z\",\"merchant_id\":\"merchant-demo-001\",\"nonce\":\"AAECAwQFBgcICQoLDA0ODw\",\"operation_id\":\"123e4567-e89b-42d3-a456-426614174000\",\"pos_key_fingerprint\":\"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\",\"pos_key_id\":\"pos-key-demo-001\",\"terminal_id\":\"terminal-demo-001\",\"type\":\"payment_request\",\"version\":2}",
+  "public_key_der_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2yRENagcYZjC7zXDYHBJ+I09pJgTz2/Hyw1jx8kjDxIkp7LM1HrgghZGwNomPQkFpy15fVxd6bOEhihdK2J9rQ==",
+  "signature_der_b64": "MEUCIQCvV+Lkdnq8TkPC9CDUiWWloNjrhKHD44MScdA9CvoHawIgdwMf9OuOHpfzXJ9ZltnzMiDiCbb8eze8uqeNFxnDJrs="
+}
