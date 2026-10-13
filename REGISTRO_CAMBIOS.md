@@ -49,3 +49,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la resolución de claves registradas pertenece a las fases de autorización y backend.
 - **Commit:** `feat(protocol): [TFG-F1-BE-02] preservar bytes firmados en transporte`
 - **Impacto académico:** elimina una fuente de ambigüedad entre la firma producida y la verificada.
+
+## TFG-F2-BE-01 — Esquema v2 y migración preservando datos
+
+- **Fecha:** 2026-10-13
+- **Fase:** 2 — Backend seguro y contabilidad atómica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el esquema heredado usa importes decimales y no representa roles, billeteras, claves, autorizaciones, evidencia ni libro contable v2.
+- **Comportamiento anterior:** `create_all` solo creaba tablas faltantes y no ofrecía una ruta verificable desde bases actuales.
+- **Comportamiento nuevo:** el backend agrega roles, billeteras en centavos, terminales, claves, autorizaciones, pagos v2 y asientos; la migración añade el rol y crea una billetera estable por usuario conservando el saldo heredado.
+- **Decisión:** incorporar tablas v2 con centavos enteros y una migración incremental que preserve usuarios y saldos heredados.
+- **Archivos:** `models.py`, `migrations.py`, `main.py`, `settings.py`, `.env.example`, `tests/test_migrations.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** SQLite, usuarios, billeteras, claves, autorizaciones, operaciones y asientos.
+- **Pruebas:** 8 pruebas backend correctas; una crea una base SQLite heredada temporal, migra, conserva usuario y saldo, convierte a centavos y comprueba que el backfill sea idempotente.
+- **Limitaciones:** los endpoints y la aplicación contable se implementan en unidades posteriores.
+- **Commit:** `feat(db): [TFG-F2-BE-01] agregar esquema contable v2`
+- **Impacto académico:** establece la representación persistente usada para demostrar idempotencia y atomicidad.

@@ -1,7 +1,19 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -14,6 +26,7 @@ class User(Base):
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     saldo_real: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="cliente", server_default="cliente")
 
     offline_tokens: Mapped[list["OfflineToken"]] = relationship(
         back_populates="user",
@@ -73,3 +86,99 @@ class TransaccionOfflineDB(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+class Wallet(Base):
+    __tablename__ = "wallets"
+    __table_args__ = (
+        CheckConstraint("confirmed_balance_cents >= 0", name="ck_wallet_balance_nonnegative"),
+    )
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    confirmed_balance_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ARS", server_default="ARS")
+
+
+class Terminal(Base):
+    __tablename__ = "terminals"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    merchant_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+
+
+class RegisteredKey(Base):
+    __tablename__ = "registered_keys"
+    __table_args__ = (
+        UniqueConstraint("fingerprint", name="uq_registered_key_fingerprint"),
+        UniqueConstraint("proof_nonce", name="uq_registered_key_proof_nonce"),
+    )
+
+    key_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)
+    wallet_id: Mapped[str | None] = mapped_column(ForeignKey("wallets.id"), nullable=True, index=True)
+    terminal_id: Mapped[str | None] = mapped_column(ForeignKey("terminals.id"), nullable=True, index=True)
+    public_key_b64: Mapped[str] = mapped_column(String, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    proof_nonce: Mapped[str] = mapped_column(String(120), nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class OfflineAuthorization(Base):
+    __tablename__ = "offline_authorizations"
+    __table_args__ = (
+        CheckConstraint("max_payment_cents > 0", name="ck_auth_max_payment_positive"),
+        CheckConstraint("remaining_amount_cents >= 0", name="ck_auth_remaining_amount_nonnegative"),
+        CheckConstraint("remaining_payments >= 0", name="ck_auth_remaining_payments_nonnegative"),
+    )
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    wallet_key_id: Mapped[str] = mapped_column(ForeignKey("registered_keys.key_id"), nullable=False, index=True)
+    max_payment_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining_payments: Mapped[int] = mapped_column(Integer, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+
+
+class OfflinePaymentV2(Base):
+    __tablename__ = "offline_payments_v2"
+    __table_args__ = (
+        CheckConstraint("amount_cents > 0", name="ck_payment_amount_positive"),
+    )
+
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    merchant_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    terminal_id: Mapped[str] = mapped_column(ForeignKey("terminals.id"), nullable=False, index=True)
+    authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), nullable=False, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    nonce: Mapped[str] = mapped_column(String(22), unique=True, nullable=False)
+    request_envelope: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    receipt_envelope: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    ack_envelope: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    state: Mapped[str] = mapped_column(String(30), nullable=False)
+    rejection_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LedgerEntry(Base):
+    __tablename__ = "ledger_entries"
+    __table_args__ = (
+        UniqueConstraint("operation_id", "entry_type", name="uq_ledger_operation_entry_type"),
+        CheckConstraint("delta_cents != 0", name="ck_ledger_delta_nonzero"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    operation_id: Mapped[str] = mapped_column(ForeignKey("offline_payments_v2.operation_id"), nullable=False, index=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    entry_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    delta_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

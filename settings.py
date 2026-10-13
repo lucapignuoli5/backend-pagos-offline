@@ -25,3 +25,9 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", "http://127.0.0.1:8000").split(",")
     if origin.strip()
 ]
+
+INITIAL_BALANCE_CENTS = int(os.getenv("INITIAL_BALANCE_CENTS", "1000000"))
+MAX_PAYMENT_CENTS = int(os.getenv("MAX_PAYMENT_CENTS", "100000"))
+MAX_OFFLINE_PAYMENTS = int(os.getenv("MAX_OFFLINE_PAYMENTS", "10"))
+OFFLINE_AUTHORIZATION_SECONDS = int(os.getenv("OFFLINE_AUTHORIZATION_SECONDS", "86400"))
+POS_REQUEST_SECONDS = int(os.getenv("POS_REQUEST_SECONDS", "120"))

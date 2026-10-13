@@ -25,6 +25,7 @@ import models
 import schemas
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
+from migrations import backfill_wallets, run_schema_migrations
 from settings import (
     CORS_ORIGINS,
     DEMO_SEED_ENABLED,
@@ -72,11 +73,13 @@ def _ensure_password_hash_column() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    run_schema_migrations(engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         _ensure_password_hash_column()
         if not DEMO_SEED_ENABLED:
+            backfill_wallets(db)
             yield
             return
         if not DEMO_SEED_PASSWORD:
@@ -108,6 +111,7 @@ async def lifespan(app: FastAPI):
             cliente.password_hash = hash_password(DEMO_SEED_PASSWORD)
 
         db.commit()
+        backfill_wallets(db)
         yield
     finally:
         db.close()
