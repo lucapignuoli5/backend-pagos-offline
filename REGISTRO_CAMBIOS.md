@@ -202,3 +202,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la lista es adecuada para el prototipo; una instalación productiva requeriría paginación y política de revocación/actualización.
 - **Commit:** `feat(keys): [TFG-F4-BE-01] distribuir claves publicas confiables`
 - **Impacto académico:** demuestra cómo ambos actores obtienen material público previo a la operación offline.
+
+## TFG-F4-BE-02 — Limitar la distribución de claves por rol
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la revisión de fase detectó que un usuario autenticado podía enumerar claves y alcances que no necesita para su rol.
+- **Comportamiento anterior:** clientes y comercios podían pedir indistintamente claves de billetera o POS.
+- **Comportamiento nuevo:** clientes reciben únicamente claves POS y comercios únicamente claves de billetera; otros propósitos o roles se rechazan.
+- **Archivos:** `api_v2.py`, `tests/test_api_v2_keys.py`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** suite completa de 28 pruebas correcta; incluye acceso permitido del comercio a claves de billetera y rechazo del cliente para ese mismo directorio.
+- **Limitaciones:** las claves siguen siendo públicas; la restricción reduce exposición de metadatos y no sustituye una política de directorio a gran escala.
+- **Commit:** `fix(keys): [TFG-F4-BE-02] limitar directorio por rol`
+- **Impacto académico:** documenta el mínimo material de confianza que necesita cada actor offline.

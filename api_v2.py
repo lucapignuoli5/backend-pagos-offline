@@ -31,10 +31,13 @@ CurrentUser = Annotated[models.User, Depends(get_current_user)]
 def list_trusted_keys(
     purpose: str,
     db: DbSession,
-    _: CurrentUser,
+    user: CurrentUser,
 ) -> list[schemas.TrustedKeyResponse]:
     if purpose not in {"wallet", "pos"}:
         raise HTTPException(status_code=422, detail="Proposito de clave invalido")
+    allowed_purpose = "pos" if user.role == "cliente" else "wallet" if user.role == "comercio" else None
+    if purpose != allowed_purpose:
+        raise HTTPException(status_code=403, detail="Proposito de clave no autorizado")
     keys = db.query(models.RegisteredKey).filter(
         models.RegisteredKey.purpose == purpose,
         models.RegisteredKey.revoked.is_(False),

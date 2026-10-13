@@ -39,10 +39,17 @@ class KeyAndAuthorizationTests(unittest.TestCase):
             password_hash="unused",
             role="cliente",
         )
+        self.merchant_user = models.User(
+            id=3,
+            nombre="comercio",
+            saldo_real=Decimal("0.00"),
+            password_hash="unused",
+            role="comercio",
+        )
         self.wallet = models.Wallet(
             id="wallet-1", user_id=1, confirmed_balance_cents=1_000_000, currency="ARS"
         )
-        self.db.add_all([self.client_user, self.other_user, self.wallet])
+        self.db.add_all([self.client_user, self.other_user, self.merchant_user, self.wallet])
         self.db.commit()
 
     def tearDown(self):
@@ -58,8 +65,11 @@ class KeyAndAuthorizationTests(unittest.TestCase):
         self.assertFalse(repeated.created)
         stored = self.db.get(models.RegisteredKey, "wallet-key-1")
         self.assertEqual(stored.wallet_id, "wallet-1")
-        listed = list_trusted_keys("wallet", self.db, self.client_user)
+        listed = list_trusted_keys("wallet", self.db, self.merchant_user)
         self.assertEqual([(item.key_id, item.scope_id) for item in listed], [("wallet-key-1", "wallet-1")])
+        with self.assertRaises(HTTPException) as forbidden:
+            list_trusted_keys("wallet", self.db, self.client_user)
+        self.assertEqual(forbidden.exception.status_code, 403)
 
     def test_authorization_respects_limits_and_ownership(self):
         register_key(self._key_request("wallet-key-1", "wallet", "wallet-1"), self.db, self.client_user)
