@@ -190,6 +190,8 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         "access_token": token,
         "token_type": "bearer",
         "expires_in": expires_in,
+        "user_id": usuario.id,
+        "wallet_id": f"wallet-{usuario.id}",
     }
 
 

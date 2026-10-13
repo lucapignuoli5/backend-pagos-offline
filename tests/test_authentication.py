@@ -58,6 +58,8 @@ class AuthenticationTests(unittest.TestCase):
         claims = jwt.decode(response["access_token"], auth.JWT_SECRET_KEY, algorithms=[auth.JWT_ALGORITHM])
         self.assertEqual(claims["sub"], "1")
         self.assertEqual(claims["role"], "cliente")
+        self.assertEqual(response["user_id"], 1)
+        self.assertEqual(response["wallet_id"], "wallet-1")
 
     def test_throttle_is_scoped_and_expires(self):
         throttle = LoginThrottle(maximum_attempts=2, lock_seconds=60)

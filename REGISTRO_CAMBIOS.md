@@ -129,3 +129,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** el bloqueo sigue siendo memoria local del proceso y no sustituye un limitador distribuido.
 - **Commit:** `fix(auth): [TFG-F2-BE-05] cerrar autenticacion segura`
 - **Impacto académico:** documenta las propiedades realmente probadas del acceso al prototipo.
+
+## TFG-F3-BE-01 — Exponer la billetera asociada al inicio de sesión
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** Android necesita identificar de forma explícita la billetera cuyo saldo y autorizaciones persiste localmente.
+- **Comportamiento anterior:** el login devolvía solamente el token y el tipo.
+- **Comportamiento nuevo:** la respuesta incluye `wallet_id` derivado del usuario autenticado (`wallet-{id}`), sin exponer credenciales.
+- **Archivos:** `schemas.py`, `main.py`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** suite backend completa de 21 pruebas correcta en base SQLite temporal; la prueba de login verifica token, rol y `wallet_id` sin usar la base existente ni servicios externos.
+- **Limitaciones:** todavía no descarga autorizaciones ni registra claves; no se inicia el backend sobre bases existentes.
+- **Commit:** `feat(auth): [TFG-F3-BE-01] devolver billetera del usuario`
+- **Impacto académico:** hace explícita la identidad de la billetera para vincular saldo, reservas y conciliación.
