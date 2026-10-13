@@ -176,15 +176,15 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 
 - **Fecha:** 2026-10-13
 - **Fase:** 4 — POS de Windows
-- **Estado:** EN PROGRESO
+- **Estado:** PARCIAL
 - **Hallazgo o requisito:** el flujo principal requiere una aplicación de escritorio que cree la solicitud, use PC/SC, verifique el comprobante y persista aceptación antes del acuse.
 - **Comportamiento anterior:** no existía `pos_desktop/`; el POS era solamente una propuesta académica.
-- **Comportamiento nuevo:** pendiente de implementación.
+- **Comportamiento nuevo:** el POS crea y firma solicitudes, ejecuta dos acercamientos APDU, verifica la clave y todos los campos del comprobante, persiste comprobante/acuse antes de entregarlo y tolera reintentos. Incluye SQLite con migración, DPAPI, PC/SC, simulador y pantallas PySide6 con tareas fuera del hilo principal.
 - **Decisión:** crear un núcleo Python independiente de PySide6, almacenamiento SQLite propio, claves privadas protegidas con DPAPI, adaptadores PC/SC/simulador y UI con trabajo fuera del hilo principal.
-- **Archivos:** por completar.
+- **Archivos:** `pos_desktop/`, `requirements-pos.txt`, `tests/test_pos_desktop.py`, `REGISTRO_CAMBIOS.md`.
 - **Contratos o datos afectados:** protocolo APDU v2, base local del POS, claves POS y evidencia para conciliación.
-- **Pruebas:** pendientes.
-- **Limitaciones:** la prueba con ACR122U continuará pendiente hasta disponer del lector físico.
+- **Pruebas:** siete pruebas POS correctas: flujo completo de dos acercamientos e idempotencia, espera sin falsa aceptación, alteración de evidencia, cambio de importe con firma válida, DPAPI real y construcción de las cuatro pantallas PySide6 en modo offscreen; análisis sintáctico correcto. La suite completa alcanza 28 pruebas.
+- **Limitaciones:** PySide6 quedó instalado y validado. `pyscard` no ofrece wheel para el Python 3.14 presente y su compilación requiere Microsoft C++ Build Tools; el adaptador PC/SC conserva verificación sintáctica. La prueba ACR122U continúa pendiente hasta disponer del lector físico.
 - **Commit:** `feat(pos): [TFG-F4-POS-01] implementar flujo local con simulador`
 - **Impacto académico:** cambia el POS de propuesta a implementación demostrable mediante simulador, sin afirmar interoperabilidad física.
 

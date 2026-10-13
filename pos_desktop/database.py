@@ -1,0 +1,196 @@
+from __future__ import annotations
+
+import sqlite3
+from contextlib import closing
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class PosOperation:
+    operation_id: str
+    merchant_id: str
+    terminal_id: str
+    amount_cents: int
+    nonce: str
+    request_envelope: bytes
+    receipt_envelope: bytes | None
+    ack_envelope: bytes | None
+    state: str
+    created_at: str
+    updated_at: str
+
+
+class PosDatabase:
+    def __init__(self, path: Path | str):
+        self.path = str(path)
+        if self.path != ":memory:":
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+
+    def connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=10000")
+        return connection
+
+    def migrate(self) -> None:
+        with closing(self.connect()) as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version > 1:
+                raise RuntimeError("La base POS fue creada por una version mas nueva")
+            if version == 0:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    CREATE TABLE pos_identity (
+                        key_id TEXT PRIMARY KEY,
+                        public_key_b64 TEXT NOT NULL,
+                        fingerprint TEXT NOT NULL UNIQUE,
+                        protected_private_key BLOB NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE trusted_wallet_keys (
+                        key_id TEXT PRIMARY KEY,
+                        fingerprint TEXT NOT NULL UNIQUE,
+                        wallet_id TEXT NOT NULL,
+                        public_key_b64 TEXT NOT NULL,
+                        revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1))
+                    );
+                    CREATE TABLE operations (
+                        operation_id TEXT PRIMARY KEY,
+                        merchant_id TEXT NOT NULL,
+                        terminal_id TEXT NOT NULL,
+                        amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+                        nonce TEXT NOT NULL UNIQUE,
+                        request_envelope BLOB NOT NULL,
+                        receipt_envelope BLOB,
+                        ack_envelope BLOB,
+                        state TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    CREATE INDEX index_operations_state_updated_at ON operations(state, updated_at);
+                    PRAGMA user_version=1;
+                    COMMIT;
+                    """
+                )
+
+    def save_identity(
+        self, key_id: str, public_key_b64: str, fingerprint: str,
+        protected_private_key: bytes, created_at: str,
+    ) -> None:
+        with closing(self.connect()) as db:
+            db.execute(
+                "INSERT INTO pos_identity VALUES (?, ?, ?, ?, ?)",
+                (key_id, public_key_b64, fingerprint, protected_private_key, created_at),
+            )
+
+    def get_identity(self, key_id: str) -> sqlite3.Row | None:
+        with closing(self.connect()) as db:
+            return db.execute("SELECT * FROM pos_identity WHERE key_id=?", (key_id,)).fetchone()
+
+    def trust_wallet_key(
+        self, key_id: str, fingerprint: str, wallet_id: str, public_key_b64: str,
+    ) -> None:
+        with closing(self.connect()) as db:
+            db.execute(
+                """INSERT INTO trusted_wallet_keys(
+                     key_id, fingerprint, wallet_id, public_key_b64, revoked
+                   ) VALUES (?, ?, ?, ?, 0)
+                   ON CONFLICT(key_id) DO UPDATE SET
+                     fingerprint=excluded.fingerprint,
+                     wallet_id=excluded.wallet_id,
+                     public_key_b64=excluded.public_key_b64,
+                     revoked=0""",
+                (key_id, fingerprint, wallet_id, public_key_b64),
+            )
+
+    def resolve_wallet_key(self, key_id: str, fingerprint: str, wallet_id: str) -> str | None:
+        with closing(self.connect()) as db:
+            row = db.execute(
+                """SELECT public_key_b64 FROM trusted_wallet_keys
+                   WHERE key_id=? AND fingerprint=? AND wallet_id=? AND revoked=0""",
+                (key_id, fingerprint, wallet_id),
+            ).fetchone()
+            return row[0] if row else None
+
+    def insert_request(self, payload: dict, envelope: bytes, now: str) -> bool:
+        with closing(self.connect()) as db:
+            existing = db.execute(
+                "SELECT request_envelope FROM operations WHERE operation_id=?",
+                (payload["operation_id"],),
+            ).fetchone()
+            if existing:
+                if bytes(existing[0]) != envelope:
+                    raise ValueError("operation_id ya existe con otra solicitud")
+                return False
+            db.execute(
+                """INSERT INTO operations(
+                     operation_id, merchant_id, terminal_id, amount_cents, nonce,
+                     request_envelope, state, created_at, updated_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, 'REQUEST_CREATED', ?, ?)""",
+                (
+                    payload["operation_id"], payload["merchant_id"], payload["terminal_id"],
+                    payload["amount_cents"], payload["nonce"], envelope, now, now,
+                ),
+            )
+            return True
+
+    def mark_request_delivered(self, operation_id: str, now: str) -> None:
+        self._transition(operation_id, {"REQUEST_CREATED", "REQUEST_DELIVERED"}, "REQUEST_DELIVERED", now)
+
+    def accept_receipt_and_ack(
+        self, operation_id: str, receipt: bytes, ack: bytes, now: str,
+    ) -> None:
+        with closing(self.connect()) as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT receipt_envelope, ack_envelope, state FROM operations WHERE operation_id=?",
+                (operation_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Operacion POS inexistente")
+            if row[0] is not None:
+                if bytes(row[0]) != receipt or bytes(row[1]) != ack:
+                    raise ValueError("Evidencia conflictiva para la operacion")
+                db.commit()
+                return
+            if row["state"] not in {"REQUEST_DELIVERED", "WAITING_CONFIRMATION"}:
+                raise ValueError("Estado POS incompatible con la aceptacion")
+            db.execute(
+                """UPDATE operations SET receipt_envelope=?, ack_envelope=?,
+                   state='LOCALLY_ACCEPTED', updated_at=? WHERE operation_id=?""",
+                (receipt, ack, now, operation_id),
+            )
+            db.commit()
+
+    def mark_waiting(self, operation_id: str, now: str) -> None:
+        self._transition(
+            operation_id, {"REQUEST_DELIVERED", "WAITING_CONFIRMATION"},
+            "WAITING_CONFIRMATION", now,
+        )
+
+    def get_operation(self, operation_id: str) -> PosOperation | None:
+        with closing(self.connect()) as db:
+            row = db.execute("SELECT * FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+            return PosOperation(**dict(row)) if row else None
+
+    def list_operations(self, limit: int = 100) -> list[PosOperation]:
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                "SELECT * FROM operations ORDER BY updated_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [PosOperation(**dict(row)) for row in rows]
+
+    def _transition(self, operation_id: str, allowed: set[str], state: str, now: str) -> None:
+        placeholders = ",".join("?" for _ in allowed)
+        with closing(self.connect()) as db:
+            result = db.execute(
+                f"UPDATE operations SET state=?, updated_at=? WHERE operation_id=? AND state IN ({placeholders})",
+                (state, now, operation_id, *sorted(allowed)),
+            )
+            if result.rowcount != 1:
+                raise ValueError("Transicion de estado POS invalida")
+
