@@ -27,6 +27,30 @@ DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[models.User, Depends(get_current_user)]
 
 
+@router.get("/keys/trusted/{purpose}", response_model=list[schemas.TrustedKeyResponse])
+def list_trusted_keys(
+    purpose: str,
+    db: DbSession,
+    _: CurrentUser,
+) -> list[schemas.TrustedKeyResponse]:
+    if purpose not in {"wallet", "pos"}:
+        raise HTTPException(status_code=422, detail="Proposito de clave invalido")
+    keys = db.query(models.RegisteredKey).filter(
+        models.RegisteredKey.purpose == purpose,
+        models.RegisteredKey.revoked.is_(False),
+    ).order_by(models.RegisteredKey.key_id).all()
+    return [
+        schemas.TrustedKeyResponse(
+            key_id=key.key_id,
+            fingerprint=key.fingerprint,
+            purpose=purpose,
+            scope_id=key.wallet_id if purpose == "wallet" else key.terminal_id,
+            public_key_b64=key.public_key_b64,
+        )
+        for key in keys
+    ]
+
+
 @router.post("/keys/register", response_model=schemas.KeyRegistrationResponse)
 def register_key(
     request: schemas.KeyRegistrationRequest,

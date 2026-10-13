@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
-from api_v2 import create_offline_authorization, get_wallet_balance, register_key
+from api_v2 import create_offline_authorization, get_wallet_balance, list_trusted_keys, register_key
 from database import Base
 from protocol_v2 import canonical_bytes, encode_public_key, public_key_fingerprint
 
@@ -58,6 +58,8 @@ class KeyAndAuthorizationTests(unittest.TestCase):
         self.assertFalse(repeated.created)
         stored = self.db.get(models.RegisteredKey, "wallet-key-1")
         self.assertEqual(stored.wallet_id, "wallet-1")
+        listed = list_trusted_keys("wallet", self.db, self.client_user)
+        self.assertEqual([(item.key_id, item.scope_id) for item in listed], [("wallet-key-1", "wallet-1")])
 
     def test_authorization_respects_limits_and_ownership(self):
         register_key(self._key_request("wallet-key-1", "wallet", "wallet-1"), self.db, self.client_user)

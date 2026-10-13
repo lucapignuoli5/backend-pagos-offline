@@ -130,6 +130,14 @@ class KeyRegistrationResponse(BaseModel):
     created: bool
 
 
+class TrustedKeyResponse(BaseModel):
+    key_id: str
+    fingerprint: str
+    purpose: Literal["wallet", "pos"]
+    scope_id: str
+    public_key_b64: str
+
+
 class OfflineAuthorizationRequest(BaseModel):
     wallet_id: str = Field(..., min_length=1, max_length=120)
     wallet_key_id: str = Field(..., min_length=1, max_length=120)

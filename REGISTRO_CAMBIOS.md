@@ -171,3 +171,34 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se abrió la base existente ni se inició el servidor; POS y ACR122U permanecen pendientes.
 - **Commit:** `docs(review): [TFG-F3-BE-03] cerrar revision de fase 3`
 - **Impacto académico:** separa evidencia automatizada del backend de la interoperabilidad física aún no demostrada.
+
+## TFG-F4-POS-01 — Núcleo durable y simulador del POS de Windows
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** EN PROGRESO
+- **Hallazgo o requisito:** el flujo principal requiere una aplicación de escritorio que cree la solicitud, use PC/SC, verifique el comprobante y persista aceptación antes del acuse.
+- **Comportamiento anterior:** no existía `pos_desktop/`; el POS era solamente una propuesta académica.
+- **Comportamiento nuevo:** pendiente de implementación.
+- **Decisión:** crear un núcleo Python independiente de PySide6, almacenamiento SQLite propio, claves privadas protegidas con DPAPI, adaptadores PC/SC/simulador y UI con trabajo fuera del hilo principal.
+- **Archivos:** por completar.
+- **Contratos o datos afectados:** protocolo APDU v2, base local del POS, claves POS y evidencia para conciliación.
+- **Pruebas:** pendientes.
+- **Limitaciones:** la prueba con ACR122U continuará pendiente hasta disponer del lector físico.
+- **Commit:** `feat(pos): [TFG-F4-POS-01] implementar flujo local con simulador`
+- **Impacto académico:** cambia el POS de propuesta a implementación demostrable mediante simulador, sin afirmar interoperabilidad física.
+
+## TFG-F4-BE-01 — Distribuir claves públicas confiables
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** Android y POS deben verificar firmantes registrados antes de quedar sin Internet; el registro existía, pero no había una ruta para obtener las claves públicas activas.
+- **Comportamiento anterior:** las pruebas inyectaban claves directamente en las bases locales.
+- **Comportamiento nuevo:** una ruta autenticada lista claves activas por propósito con ID, huella, alcance y clave pública; el POS almacena claves de billetera durante el acceso.
+- **Archivos:** `schemas.py`, `api_v2.py`, `pos_desktop/backend_client.py`, pruebas y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** `GET /api/keys/trusted/{purpose}` y almacenes locales de confianza.
+- **Pruebas:** suite backend completa de 26 pruebas correcta en SQLite temporal; se comprueba que la clave registrada aparece con el alcance esperado y que las cinco pruebas POS no afectan datos existentes.
+- **Limitaciones:** la lista es adecuada para el prototipo; una instalación productiva requeriría paginación y política de revocación/actualización.
+- **Commit:** `feat(keys): [TFG-F4-BE-01] distribuir claves publicas confiables`
+- **Impacto académico:** demuestra cómo ambos actores obtienen material público previo a la operación offline.
