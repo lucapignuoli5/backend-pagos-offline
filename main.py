@@ -8,13 +8,13 @@ from hashlib import sha256
 from html import escape
 import os
 import re
+import bcrypt
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 
 try:
     import mercadopago
@@ -46,7 +46,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from jose import jwt
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"offline-payments-dummy", bcrypt.gensalt())
 mp_sdk = (
     mercadopago.SDK(MERCADO_PAGO_ACCESS_TOKEN)
     if MERCADO_PAGO_ENABLED and MERCADO_PAGO_ACCESS_TOKEN and mercadopago is not None
@@ -59,11 +59,14 @@ LOGIN_THROTTLE = LoginThrottle(maximum_attempts=MAX_LOGIN_ATTEMPTS, lock_seconds
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("ascii"))
+    except (UnicodeError, ValueError):
+        return False
 
 
 def _ensure_password_hash_column() -> None:
@@ -170,7 +173,13 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
             .first()
         )
 
-    if usuario is None or not usuario.password_hash or not verify_password(payload.password, usuario.password_hash):
+    if usuario is None or not usuario.password_hash:
+        bcrypt.checkpw(payload.password.encode("utf-8"), DUMMY_PASSWORD_HASH)
+        password_valid = False
+    else:
+        password_valid = verify_password(payload.password, usuario.password_hash)
+
+    if not password_valid:
         LOGIN_THROTTLE.fail(throttle_key)
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 

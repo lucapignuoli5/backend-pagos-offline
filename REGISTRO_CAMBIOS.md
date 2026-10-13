@@ -113,3 +113,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** se valida con inyección controlada sobre SQLite temporal.
 - **Commit:** `fix(sync): [TFG-F2-BE-04] clasificar fallos transitorios`
 - **Impacto académico:** permite explicar por qué el cliente reintenta fallos internos sin confundirlos con duplicados maliciosos.
+
+## TFG-F2-BE-05 — Cierre de autenticación y errores seguros
+
+- **Fecha:** 2026-10-13
+- **Fase:** 2 — Backend seguro y contabilidad atómica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el cierre de fase debe comprobar el bloqueo de login, los claims de rol y que Pydantic no refleje credenciales recibidas.
+- **Comportamiento anterior:** el usuario inexistente evitaba la verificación costosa de contraseña y faltaban pruebas específicas de bloqueo y respuesta segura.
+- **Comportamiento nuevo:** el login usa `bcrypt` directamente, iguala el costo del usuario inexistente, limita por combinación IP/identificador, emite rol vigente en JWT y devuelve errores 422 sin los valores recibidos.
+- **Decisión:** usar la verificación ficticia de Passlib y probar las fronteras de autenticación sin iniciar el backend ni tocar su base configurada.
+- **Archivos:** `main.py`, pruebas de autenticación y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** `/api/login`, JWT y errores 422.
+- **Pruebas:** 21 pruebas backend correctas; incluyen JWT con rol, alcance y expiración del bloqueo, ausencia de contraseña en la respuesta de validación, lote mixto y compatibilidad limpia de hash/verificación.
+- **Limitaciones:** el bloqueo sigue siendo memoria local del proceso y no sustituye un limitador distribuido.
+- **Commit:** `fix(auth): [TFG-F2-BE-05] cerrar autenticacion segura`
+- **Impacto académico:** documenta las propiedades realmente probadas del acceso al prototipo.

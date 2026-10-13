@@ -22,7 +22,7 @@ from protocol_v2 import (
     public_key_fingerprint,
     sign_payload,
 )
-from sync_v2 import process_evidence
+from sync_v2 import process_evidence, sync_offline_payments_v2
 
 
 class SyncV2Tests(unittest.TestCase):
@@ -121,6 +121,20 @@ class SyncV2Tests(unittest.TestCase):
         self.db.expire_all()
         self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
         self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
+
+    def test_mixed_batch_keeps_individual_results(self):
+        pending, _ = self._evidence("123e4567-e89b-42d3-a456-426614174005", 1_000)
+        invalid = schemas.OfflinePaymentEvidence(
+            operation_id="123e4567-e89b-42d3-a456-426614174006",
+            request_envelope_b64="invalid",
+            receipt_envelope_b64="invalid",
+        )
+        response = sync_offline_payments_v2(
+            schemas.OfflinePaymentSyncV2Request(operations=[pending, invalid]),
+            self.db,
+            self.client,
+        )
+        self.assertEqual([result.status for result in response.results], ["PENDING_EVIDENCE", "REJECTED"])
 
     def test_concurrent_payments_cannot_overdraw_balance(self):
         self.client_wallet.confirmed_balance_cents = 5_000
