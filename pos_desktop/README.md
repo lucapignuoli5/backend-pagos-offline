@@ -14,5 +14,5 @@ La configuración se recibe por variables de entorno; no se guardan secretos en 
 
 En Windows, la clave privada se cifra con DPAPI para el usuario actual. Instalar las dependencias con `requirements-pos.txt` y ejecutar `python -m pos_desktop.app`. Las operaciones de lector y base se realizan fuera del hilo de interfaz.
 
-El simulador permite demostrar los dos acercamientos: enviar solicitud, confirmar en el doble Android, recuperar/verificar el comprobante, persistir la aceptación y entregar el acuse. La conciliación con backend se incorpora en la Fase 5.
+El simulador permite demostrar los dos acercamientos: enviar solicitud, confirmar en el doble Android, recuperar/verificar el comprobante, persistir la aceptación y entregar el acuse. La pantalla de historial envía la cola durable al backend y conserva por operación los rechazos, conflictos y reintentos progresivos.
 

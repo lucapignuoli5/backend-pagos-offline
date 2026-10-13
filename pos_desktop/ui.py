@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from pos_desktop.backend_client import PosBackendClient
 from pos_desktop.service import PosService
 from pos_desktop.simulator import AndroidHceSimulator
+from pos_desktop.sync import PosSyncService
 
 
 class WorkerSignals(QObject):
@@ -46,6 +47,8 @@ class PosWindow(QMainWindow):
         self.simulator = simulator
         self.pool = QThreadPool.globalInstance()
         self.operation_id: str | None = None
+        self.access_token: str | None = None
+        self.sync_service = PosSyncService(service.database, backend)
         self.setWindowTitle("POS Pagos Offline")
         self.resize(760, 520)
         self.stack = QStackedWidget()
@@ -113,7 +116,12 @@ class PosWindow(QMainWindow):
     def _history_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(QLabel("Historial local; la conciliación remota se incorpora en la Fase 5"))
+        layout.addWidget(QLabel("Historial local y conciliación remota por operación"))
+        self.sync_status = QLabel("Conciliación pendiente")
+        sync_button = QPushButton("Conciliar operaciones pendientes")
+        sync_button.clicked.connect(self._sync)
+        layout.addWidget(sync_button)
+        layout.addWidget(self.sync_status)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Operación", "Importe", "Estado", "Actualizada"])
         layout.addWidget(self.table)
@@ -127,11 +135,11 @@ class PosWindow(QMainWindow):
         if not username or not password:
             self.access_status.setText("Complete usuario y contraseña")
             return
-        self._run(
-            lambda: self.backend.login_and_register_key(username, password),
-            lambda _: self.stack.setCurrentWidget(self.amount_page),
-            self.access_status,
-        )
+        def success(session):
+            self.access_token = session.access_token
+            self.stack.setCurrentWidget(self.amount_page)
+
+        self._run(lambda: self.backend.login_and_register_key(username, password), success, self.access_status)
 
     def _start_payment(self) -> None:
         try:
@@ -169,6 +177,22 @@ class PosWindow(QMainWindow):
 
     def _show_history(self) -> None:
         self._run(self.service.database.list_operations, self._populate_history, self.amount_status)
+
+    def _sync(self) -> None:
+        if not self.access_token:
+            self.sync_status.setText("Inicie sesión online para conciliar")
+            return
+
+        def success(summary):
+            rendered = ", ".join(f"{key}: {value}" for key, value in sorted(summary.items()))
+            self.sync_status.setText(rendered or "No hay operaciones pendientes")
+            self._show_history()
+
+        self._run(
+            lambda: self.sync_service.sync_due(self.access_token),
+            success,
+            self.sync_status,
+        )
 
     def _populate_history(self, operations) -> None:
         self.table.setRowCount(len(operations))

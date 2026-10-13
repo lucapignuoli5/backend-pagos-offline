@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 import sys
+import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,6 +11,7 @@ from pos_desktop.database import PosDatabase
 from pos_desktop.key_store import PosKeyStore, WindowsDpapiProtector
 from pos_desktop.service import PosService
 from pos_desktop.simulator import AndroidHceSimulator, SimulatorTransport
+from pos_desktop.sync import PosSyncService
 from protocol_v2 import encode_signed_envelope, parse_signed_envelope, sign_payload
 
 
@@ -112,6 +115,63 @@ class PosDesktopTests(unittest.TestCase):
         protected = protector.protect(plaintext)
         self.assertNotEqual(protected, plaintext)
         self.assertEqual(protector.unprotect(protected), plaintext)
+
+    def test_sync_applies_each_result_and_retries_missing_only(self):
+        operations = [self._accepted_operation(1_000 + index) for index in range(3)]
+
+        class Backend:
+            def sync_operations(inner_self, access_token, evidence):
+                self.assertEqual(access_token, "merchant-token")
+                return [
+                    {"operation_id": operations[0], "status": "ACCEPTED", "code": None},
+                    {"operation_id": operations[1], "status": "CONFLICT", "code": "CONTENT_MISMATCH"},
+                ]
+
+        sync = PosSyncService(
+            self.database,
+            Backend(),
+            now=lambda: datetime(2026, 10, 13, 12, 1, 0, tzinfo=timezone.utc),
+        )
+        summary = sync.sync_due("merchant-token")
+        self.assertEqual(summary, {"ACCEPTED": 1, "CONFLICT": 1, "RETRYABLE_ERROR": 1})
+        self.assertEqual(self.database.get_operation(operations[0]).state, "SYNCED")
+        self.assertEqual(self.database.get_operation(operations[1]).state, "CONFLICT")
+        retry = self.database.get_operation(operations[2])
+        self.assertEqual(retry.state, "LOCALLY_ACCEPTED")
+        self.assertEqual(retry.sync_attempts, 1)
+        self.assertEqual(retry.last_sync_error, "MISSING_RESULT")
+
+    def test_migration_from_pos_v1_preserves_operation(self):
+        path = Path(self.directory.name) / "legacy-pos.sqlite"
+        with closing(sqlite3.connect(path)) as db:
+            db.executescript(
+                """
+                CREATE TABLE pos_identity (key_id TEXT PRIMARY KEY, public_key_b64 TEXT NOT NULL,
+                  fingerprint TEXT NOT NULL UNIQUE, protected_private_key BLOB NOT NULL, created_at TEXT NOT NULL);
+                CREATE TABLE trusted_wallet_keys (key_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL UNIQUE,
+                  wallet_id TEXT NOT NULL, public_key_b64 TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE operations (operation_id TEXT PRIMARY KEY, merchant_id TEXT NOT NULL,
+                  terminal_id TEXT NOT NULL, amount_cents INTEGER NOT NULL, nonce TEXT NOT NULL UNIQUE,
+                  request_envelope BLOB NOT NULL, receipt_envelope BLOB, ack_envelope BLOB,
+                  state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+                INSERT INTO operations VALUES ('legacy-op','merchant-1','terminal-1',100,'nonce',X'01',NULL,NULL,
+                  'REQUEST_CREATED','2026-10-13T12:00:00Z','2026-10-13T12:00:00Z');
+                PRAGMA user_version=1;
+                """
+            )
+        legacy = PosDatabase(path)
+        legacy.migrate()
+        operation = legacy.get_operation("legacy-op")
+        self.assertEqual(operation.amount_cents, 100)
+        self.assertEqual(operation.sync_attempts, 0)
+        self.assertIsNone(operation.next_sync_at)
+
+    def _accepted_operation(self, amount_cents: int) -> str:
+        operation = self.service.create_payment(amount_cents)
+        self.service.deliver_request(operation.operation_id)
+        self.simulator.confirm(operation.operation_id)
+        self.service.collect_receipt(operation.operation_id)
+        return operation.operation_id
 
 
 if __name__ == "__main__":

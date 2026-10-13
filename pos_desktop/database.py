@@ -19,6 +19,9 @@ class PosOperation:
     state: str
     created_at: str
     updated_at: str
+    sync_attempts: int
+    next_sync_at: str | None
+    last_sync_error: str | None
 
 
 class PosDatabase:
@@ -38,7 +41,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -70,9 +73,24 @@ class PosDatabase:
                         state TEXT NOT NULL,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
+                        ,sync_attempts INTEGER NOT NULL DEFAULT 0
+                        ,next_sync_at TEXT
+                        ,last_sync_error TEXT
                     );
                     CREATE INDEX index_operations_state_updated_at ON operations(state, updated_at);
-                    PRAGMA user_version=1;
+                    PRAGMA user_version=2;
+                    COMMIT;
+                    """
+                )
+                version = 2
+            if version == 1:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    ALTER TABLE operations ADD COLUMN sync_attempts INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE operations ADD COLUMN next_sync_at TEXT;
+                    ALTER TABLE operations ADD COLUMN last_sync_error TEXT;
+                    PRAGMA user_version=2;
                     COMMIT;
                     """
                 )
@@ -183,6 +201,38 @@ class PosDatabase:
                 "SELECT * FROM operations ORDER BY updated_at DESC LIMIT ?", (limit,)
             ).fetchall()
             return [PosOperation(**dict(row)) for row in rows]
+
+    def list_sync_candidates(self, now: str, limit: int = 100) -> list[PosOperation]:
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                """SELECT * FROM operations
+                   WHERE state='LOCALLY_ACCEPTED'
+                     AND (next_sync_at IS NULL OR next_sync_at <= ?)
+                   ORDER BY updated_at ASC LIMIT ?""",
+                (now, limit),
+            ).fetchall()
+            return [PosOperation(**dict(row)) for row in rows]
+
+    def apply_sync_result(
+        self, operation_id: str, status: str, code: str | None,
+        now: str, next_sync_at: str | None = None,
+    ) -> None:
+        state = {
+            "ACCEPTED": "SYNCED",
+            "REJECTED": "REJECTED",
+            "CONFLICT": "CONFLICT",
+        }.get(status, "LOCALLY_ACCEPTED")
+        with closing(self.connect()) as db:
+            result = db.execute(
+                """UPDATE operations SET state=?, updated_at=?,
+                   sync_attempts=CASE WHEN ? IN ('PENDING_EVIDENCE','RETRYABLE_ERROR')
+                                      THEN sync_attempts + 1 ELSE sync_attempts END,
+                   next_sync_at=?, last_sync_error=?
+                   WHERE operation_id=? AND state IN ('LOCALLY_ACCEPTED','SYNCED','REJECTED','CONFLICT')""",
+                (state, now, status, next_sync_at, code, operation_id),
+            )
+            if result.rowcount != 1:
+                raise ValueError("Operacion POS no disponible para conciliacion")
 
     def _transition(self, operation_id: str, allowed: set[str], state: str, now: str) -> None:
         placeholders = ",".join("?" for _ in allowed)

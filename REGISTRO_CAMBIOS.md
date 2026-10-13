@@ -230,3 +230,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no hay ACR122U; `pyscard` requiere un Python con wheel compatible o Microsoft C++ Build Tools. No se declara interoperabilidad física ni medición de latencia.
 - **Commit:** `docs(review): [TFG-F4-RV-01] cerrar revision del POS simulado`
 - **Impacto académico:** acredita implementación y simulación del POS sin convertirlas en evidencia de hardware.
+
+## TFG-F5-POS-01 — Cola durable de conciliación del POS
+
+- **Fecha:** 2026-10-13
+- **Fase:** 5 — Conciliación independiente
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** una aceptación local persistida debe sincronizarse sin depender del teléfono y sin marcar lotes completos por una respuesta HTTP exitosa.
+- **Comportamiento anterior:** el POS conservaba evidencia, pero no la enviaba al backend ni registraba intentos/resultados individuales.
+- **Comportamiento nuevo:** SQLite v2 conserva intentos, próxima ejecución y último código; el POS envía solicitud/comprobante/acuse, valida IDs y estados individuales, aplica solo cada resultado conocido y reintenta ausentes o transitorios con espera exponencial.
+- **Decisión:** migrar la SQLite del POS, enviar evidencia v2 por operación, aplicar cada estado y usar reintentos progresivos solo para fallos transitorios.
+- **Archivos:** `pos_desktop/database.py`, `pos_desktop/backend_client.py`, `pos_desktop/sync.py`, `pos_desktop/ui.py`, `pos_desktop/README.md`, `tests/test_pos_desktop.py`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** nueve pruebas POS correctas, incluidas migración v1→v2 con operación preservada y lote mixto donde solo faltantes se reintentan; la suite completa alcanza 30 pruebas.
+- **Limitaciones:** la sesión del comercio se obtiene online y no se guarda en disco.
+- **Commit:** `feat(sync): [TFG-F5-POS-01] conciliar cola durable del POS`
+- **Impacto académico:** demuestra que la PC puede conciliar independientemente del teléfono.

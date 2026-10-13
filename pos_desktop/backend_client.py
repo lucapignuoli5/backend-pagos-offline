@@ -66,6 +66,21 @@ class PosBackendClient:
             )
         return session
 
+    def sync_operations(self, access_token: str, operations: list[dict]) -> list[dict]:
+        response = self._request(
+            "/api/offline-payments/sync", {"operations": operations}, access_token
+        )
+        results = response.get("results")
+        if not isinstance(results, list) or any(not isinstance(item, dict) for item in results):
+            raise RuntimeError("Respuesta de conciliacion invalida")
+        return results
+
+    def get_operation_status(self, access_token: str, operation_id: str) -> dict:
+        value = self._get_object(f"/api/offline-payments/{operation_id}", access_token)
+        if value.get("operation_id") != operation_id or not isinstance(value.get("status"), str):
+            raise RuntimeError("Estado de operacion invalido")
+        return value
+
     def _get(self, path: str, token: str) -> list[dict]:
         request = Request(
             self.config.backend_url.rstrip("/") + path,
@@ -81,6 +96,23 @@ class PosBackendClient:
             raise RuntimeError("No se pudo completar la comunicacion con el backend") from exc
         if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
             raise RuntimeError("Respuesta de claves del backend invalida")
+        return value
+
+    def _get_object(self, path: str, token: str) -> dict:
+        request = Request(
+            self.config.backend_url.rstrip("/") + path,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
+                value = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise RuntimeError(f"Backend rechazo la solicitud ({exc.code})") from exc
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise RuntimeError("No se pudo completar la comunicacion con el backend") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError("Respuesta del backend invalida")
         return value
 
     def _request(self, path: str, payload: dict, token: str | None = None) -> dict:
