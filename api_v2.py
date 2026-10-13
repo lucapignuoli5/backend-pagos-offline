@@ -88,7 +88,12 @@ def register_key(
             raise HTTPException(status_code=403, detail="Solo comercios registran claves POS")
         terminal = db.get(models.Terminal, scope_id)
         if terminal is None:
-            terminal = models.Terminal(id=scope_id, merchant_user_id=user.id, active=True)
+            terminal = models.Terminal(
+                id=scope_id,
+                merchant_user_id=user.id,
+                merchant_id=f"merchant-{user.id}",
+                active=True,
+            )
             db.add(terminal)
         elif terminal.merchant_user_id != user.id or not terminal.active:
             raise HTTPException(status_code=403, detail="Terminal no autorizada")

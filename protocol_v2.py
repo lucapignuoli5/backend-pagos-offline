@@ -249,6 +249,8 @@ def validate_payload(payload: Mapping[str, Any]) -> MessageType:
         accepted_at = _timestamp(payload["accepted_at"], "accepted_at")
         if accepted_at < issued_at:
             raise ProtocolError("accepted_at no puede preceder a issued_at")
+        if accepted_at > expires_at:
+            raise ProtocolError("accepted_at no puede ser posterior a expires_at")
         if payload["status"] != "LOCALLY_ACCEPTED":
             raise ProtocolError("Estado de acuse no soportado")
     canonical_bytes(payload)

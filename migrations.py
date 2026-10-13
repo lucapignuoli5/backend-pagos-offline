@@ -19,6 +19,15 @@ def run_schema_migrations(engine: Engine) -> None:
             connection.execute(
                 text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'cliente'")
             )
+    inspector = inspect(engine)
+    if "terminals" in inspector.get_table_names():
+        terminal_columns = {column["name"] for column in inspector.get_columns("terminals")}
+        if "merchant_id" not in terminal_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE terminals ADD COLUMN merchant_id VARCHAR(120)"))
+                connection.execute(
+                    text("UPDATE terminals SET merchant_id = 'merchant-' || merchant_user_id WHERE merchant_id IS NULL")
+                )
 
 
 def backfill_wallets(db: Session) -> int:

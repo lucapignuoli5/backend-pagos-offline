@@ -81,3 +81,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la sincronización contable se implementa en la siguiente unidad.
 - **Commit:** `feat(api): [TFG-F2-BE-02] proteger claves y autorizaciones v2`
 - **Impacto académico:** documenta el requisito previo de claves conocidas antes de operar sin conexión.
+
+## TFG-F2-BE-03 — Sincronización idempotente y contabilidad atómica
+
+- **Fecha:** 2026-10-13
+- **Fase:** 2 — Backend seguro y contabilidad atómica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** teléfono y POS pueden sincronizar en cualquier orden; un comprobante sin acuse no debe mover saldos y una operación no puede aplicarse dos veces.
+- **Comportamiento anterior:** la ruta heredada reconstruía datos firmados, procesaba estados globales y no modelaba evidencia parcial ni conflictos de contenido.
+- **Comportamiento nuevo:** la API conserva evidencia exacta por operación, devuelve resultados individuales, deja comprobantes sin acuse en `PENDING_EVIDENCE`, detecta conflictos y aplica débito, crédito, autorización y dos asientos de forma atómica e idempotente.
+- **Decisión:** procesar cada elemento en su propia transacción, conservar sobres exactos y aplicar actualizaciones SQL condicionadas con asientos únicos.
+- **Archivos:** `sync_v2.py`, `schemas.py`, `models.py`, `migrations.py`, `api_v2.py`, `main.py`, `protocol_v2.py`, `tests/test_sync_v2.py`, `tests/test_protocol_v2.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** `POST /api/offline-payments/sync`, consulta por operación, saldos, autorizaciones y libro contable.
+- **Pruebas:** 16 pruebas backend correctas; cubren evidencia parcial, acuse posterior, duplicado idéntico, conflicto de contenido, usuario ajeno, dos pagos concurrentes contra saldo insuficiente, fallo simulado entre actualizaciones y vencimiento previo al acuse.
+- **Limitaciones:** SQLite serializa escritores y puede devolver `RETRYABLE_ERROR` bajo contención; los clientes deben reintentar ese resultado. Las pruebas usan bases temporales, no datos existentes.
+- **Commit:** `feat(sync): [TFG-F2-BE-03] aplicar pagos v2 atomicamente`
+- **Impacto académico:** aporta evidencia de conciliación posterior, duplicados y resultados individuales.

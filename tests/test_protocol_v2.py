@@ -99,6 +99,29 @@ class ProtocolV2Tests(unittest.TestCase):
         with self.assertRaises(ProtocolError):
             chunk_message(b"x" * (MAX_MESSAGE_BYTES + 1))
 
+    def test_ack_must_be_accepted_before_request_expiry(self):
+        ack = {
+            "version": 2,
+            "type": "payment_ack",
+            "operation_id": self.request["operation_id"],
+            "merchant_id": self.request["merchant_id"],
+            "terminal_id": self.request["terminal_id"],
+            "amount_cents": self.request["amount_cents"],
+            "currency": "ARS",
+            "nonce": self.request["nonce"],
+            "issued_at": self.request["issued_at"],
+            "expires_at": self.request["expires_at"],
+            "wallet_id": "wallet-1",
+            "offline_authorization_id": "authorization-1",
+            "pos_key_id": self.request["pos_key_id"],
+            "pos_key_fingerprint": self.request["pos_key_fingerprint"],
+            "receipt_digest": "0" * 64,
+            "accepted_at": "2026-10-13T15:02:01Z",
+            "status": "LOCALLY_ACCEPTED",
+        }
+        with self.assertRaises(ProtocolError):
+            validate_payload(ack)
+
 
 if __name__ == "__main__":
     unittest.main()

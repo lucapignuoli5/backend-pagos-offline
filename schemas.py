@@ -153,3 +153,30 @@ class WalletBalanceResponse(BaseModel):
     confirmed_balance_cents: int
     authorized_offline_cents: int
     available_for_authorization_cents: int
+
+
+class OfflinePaymentEvidence(BaseModel):
+    operation_id: str = Field(..., min_length=36, max_length=36)
+    request_envelope_b64: str = Field(..., min_length=1, max_length=8192)
+    receipt_envelope_b64: str = Field(..., min_length=1, max_length=8192)
+    ack_envelope_b64: Optional[str] = Field(default=None, min_length=1, max_length=8192)
+
+
+class OfflinePaymentSyncV2Request(BaseModel):
+    operations: list[OfflinePaymentEvidence] = Field(..., min_length=1, max_length=100)
+
+
+class OfflinePaymentResultV2(BaseModel):
+    operation_id: str
+    status: Literal["ACCEPTED", "REJECTED", "CONFLICT", "PENDING_EVIDENCE", "RETRYABLE_ERROR"]
+    code: Optional[str] = None
+
+
+class OfflinePaymentSyncV2Response(BaseModel):
+    results: list[OfflinePaymentResultV2]
+
+
+class OfflinePaymentStatusResponse(BaseModel):
+    operation_id: str
+    status: str
+    code: Optional[str] = None

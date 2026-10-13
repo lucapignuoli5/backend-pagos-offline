@@ -105,6 +105,7 @@ class Terminal(Base):
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
     merchant_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    merchant_id: Mapped[str] = mapped_column(String(120), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
 
 
