@@ -31,7 +31,13 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La API v2 dispone de login JWT, registro de claves con prueba de posesión, autorizaciones offline, consulta de saldo, sincronización por resultado y consulta por operación.
 - La contabilidad v2 usa importes enteros en centavos, evidencia exacta, asientos únicos, actualización condicionada de saldo y estados idempotentes; las rutas heredadas no aplican movimientos v2.
 - La suite actual ejecuta 21 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto y reintento del aprovisionamiento.
-- Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio todavía no está implementado y no existe evidencia con ACR122U.
+- Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio está implementado con SQLite, DPAPI, PySide6, adaptadores PC/SC/simulador y pruebas del flujo completo simulado; no existe todavía evidencia con ACR122U.
+
+## Estado del POS verificado al 13/10/2026
+
+- `pos_desktop/` implementa acceso, importe, solicitud, espera, aceptación local, historial, configuración externa y tareas fuera del hilo de interfaz.
+- Siete pruebas específicas cubren el flujo de dos acercamientos, reintento, comprobante alterado, importe cambiado con firma válida, espera sin aceptación, DPAPI real y construcción de UI.
+- PySide6 se validó en modo offscreen. `pyscard` no pudo compilarse con Python 3.14 por falta de un wheel y de Microsoft C++ Build Tools; el adaptador permanece verificado solo por sintaxis hasta disponer de un entorno compatible y del lector.
 
 ## Entorno y efectos de ejecución
 

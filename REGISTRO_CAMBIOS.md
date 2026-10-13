@@ -216,3 +216,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** las claves siguen siendo públicas; la restricción reduce exposición de metadatos y no sustituye una política de directorio a gran escala.
 - **Commit:** `fix(keys): [TFG-F4-BE-02] limitar directorio por rol`
 - **Impacto académico:** documenta el mínimo material de confianza que necesita cada actor offline.
+
+## TFG-F4-RV-01 — Revisión de cierre del POS simulado
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** antes de iniciar conciliación debía comprobarse que POS, backend y aprovisionamiento Android siguieran compatibles y sin regresiones.
+- **Comportamiento anterior:** el núcleo POS estaba probado, pero las instrucciones aún lo describían como no implementado y el directorio de claves exponía más propósitos de los necesarios.
+- **Comportamiento nuevo:** la documentación distingue simulador de hardware; el acceso a claves se limita por rol y el árbol completo pasa sus verificaciones.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`; registro consolidado e instrucciones generales fuera del repositorio.
+- **Pruebas:** 28 pruebas Python correctas en bases temporales; siete son específicas del POS. PySide6 construye las cuatro pantallas offscreen, DPAPI real cifra/descifra y Android completa JVM, ensamblado, compilación instrumentada y lint.
+- **Limitaciones:** no hay ACR122U; `pyscard` requiere un Python con wheel compatible o Microsoft C++ Build Tools. No se declara interoperabilidad física ni medición de latencia.
+- **Commit:** `docs(review): [TFG-F4-RV-01] cerrar revision del POS simulado`
+- **Impacto académico:** acredita implementación y simulación del POS sin convertirlas en evidencia de hardware.
