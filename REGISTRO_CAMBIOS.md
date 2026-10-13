@@ -97,3 +97,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** SQLite serializa escritores y puede devolver `RETRYABLE_ERROR` bajo contención; los clientes deben reintentar ese resultado. Las pruebas usan bases temporales, no datos existentes.
 - **Commit:** `feat(sync): [TFG-F2-BE-03] aplicar pagos v2 atomicamente`
 - **Impacto académico:** aporta evidencia de conciliación posterior, duplicados y resultados individuales.
+
+## TFG-F2-BE-04 — Endurecimiento de errores de conciliación
+
+- **Fecha:** 2026-10-13
+- **Fase:** 2 — Backend seguro y contabilidad atómica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la revisión de cierre distinguió conflictos permanentes de fallos transitorios de base y exigió conservar la evidencia usada para rechazar.
+- **Comportamiento anterior:** cualquier `IntegrityError` sin operación concurrente se informaba como conflicto y un rollback por saldo podía descartar el acuse recién recibido.
+- **Comportamiento nuevo:** nonce reutilizado conserva semántica de conflicto; fallos internos sin evidencia conflictiva devuelven `RETRYABLE_ERROR`; los rechazos contables conservan el acuse recibido.
+- **Decisión:** clasificar nonce reutilizado como conflicto y otros fallos internos como reintentables; restaurar el acuse al persistir un rechazo contable.
+- **Archivos:** `sync_v2.py`, `tests/test_sync_v2.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** resultados individuales y evidencia persistida.
+- **Pruebas:** 17 pruebas backend correctas, incluida clave revocada sin movimiento y trigger SQLite que interrumpe el crédito, revierte todo y produce resultado reintentable.
+- **Limitaciones:** se valida con inyección controlada sobre SQLite temporal.
+- **Commit:** `fix(sync): [TFG-F2-BE-04] clasificar fallos transitorios`
+- **Impacto académico:** permite explicar por qué el cliente reintenta fallos internos sin confundirlos con duplicados maliciosos.

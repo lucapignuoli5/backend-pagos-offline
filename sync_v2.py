@@ -129,7 +129,13 @@ def process_evidence(
             if concurrent.request_envelope == _safe_decode(evidence.request_envelope_b64) and concurrent.receipt_envelope == _safe_decode(evidence.receipt_envelope_b64):
                 return _result(operation_id, concurrent.state if concurrent.state in {"ACCEPTED", "REJECTED"} else "PENDING_EVIDENCE", concurrent.rejection_code)
             return _result(operation_id, "CONFLICT", "CONTENT_MISMATCH")
-        return _result(operation_id, "CONFLICT", "UNIQUE_EVIDENCE_CONFLICT")
+        nonce = request.payload.get("nonce") if "request" in locals() else None
+        reused_nonce = nonce is not None and db.query(models.OfflinePaymentV2).filter(
+            models.OfflinePaymentV2.nonce == nonce
+        ).first() is not None
+        if reused_nonce:
+            return _result(operation_id, "CONFLICT", "NONCE_REUSED")
+        return _result(operation_id, "RETRYABLE_ERROR", "DATABASE_CONSTRAINT_OR_FAILURE")
     except OperationalError:
         db.rollback()
         return _result(operation_id, "RETRYABLE_ERROR", "DATABASE_BUSY")
@@ -236,6 +242,7 @@ def _apply_payment(
         .execution_options(synchronize_session=False)
     )
     if authorization_update.rowcount != 1 or debit.rowcount != 1:
+        ack_envelope = payment.ack_envelope
         db.rollback()
         persisted = db.get(models.OfflinePaymentV2, payment.operation_id)
         if persisted is None:
@@ -243,6 +250,7 @@ def _apply_payment(
             db.add(persisted)
         persisted.state = "REJECTED"
         persisted.rejection_code = "INSUFFICIENT_AUTHORIZATION_OR_BALANCE"
+        persisted.ack_envelope = ack_envelope
         db.commit()
         return _result(payment.operation_id, "REJECTED", persisted.rejection_code)
 

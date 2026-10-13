@@ -112,6 +112,16 @@ class SyncV2Tests(unittest.TestCase):
             process_evidence(self.db, self.outsider, completed)
         self.assertEqual(context.exception.status_code, 403)
 
+    def test_revoked_wallet_key_rejects_evidence_without_moving_balance(self):
+        _, completed = self._evidence("123e4567-e89b-42d3-a456-426614174004", 1_000)
+        self.wallet_key.revoked = True
+        self.db.commit()
+        result = process_evidence(self.db, self.client, completed)
+        self.assertEqual(result.status, "REJECTED")
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
+        self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
+
     def test_concurrent_payments_cannot_overdraw_balance(self):
         self.client_wallet.confirmed_balance_cents = 5_000
         self.authorization.remaining_amount_cents = 10_000
@@ -157,7 +167,8 @@ class SyncV2Tests(unittest.TestCase):
             )
         )
         self.db.commit()
-        process_evidence(self.db, self.client, completed)
+        result = process_evidence(self.db, self.client, completed)
+        self.assertEqual(result.status, "RETRYABLE_ERROR")
         self.db.expire_all()
         self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
         self.assertEqual(self.db.get(models.Wallet, "wallet-2").confirmed_balance_cents, 0)
