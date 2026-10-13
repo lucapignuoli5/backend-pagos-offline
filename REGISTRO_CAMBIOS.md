@@ -33,3 +33,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la interoperabilidad con Kotlin y hardware se registra por separado; el registro y autorización de claves se implementan en la Fase 2.
 - **Commit:** `feat(protocol): [TFG-F1-BE-01] definir contrato criptografico v2`
 - **Impacto académico:** formaliza qué datos se autentican y cómo se intercambian en los dos acercamientos NFC.
+
+## TFG-F1-BE-02 — Sobre firmado sin reconstrucción de payload
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el transporte debe preservar exactamente los bytes firmados; enviar un objeto JSON deserializado obligaría a reconstruirlo antes de verificar.
+- **Comportamiento anterior:** la especificación indicaba transportar firma y JSON juntos, pero no fijaba una representación inequívoca del sobre.
+- **Comportamiento nuevo:** cada mensaje viaja en un sobre canónico con los bytes firmados en `payload_b64` y la firma DER en `signature_b64`; las claves se resuelven desde el registro previo.
+- **Decisión:** encapsular los bytes canónicos en Base64 estándar junto con la firma DER/Base64, sin incluir claves públicas no confiables.
+- **Archivos:** `protocol_v2.py`, `docs/protocol_v2.md`, `tests/test_protocol_v2.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** representación de solicitud, comprobante y acuse sobre APDU y sincronización.
+- **Pruebas:** 7 pruebas Python, incluida conservación byte a byte, verificación de firma sobre los bytes recibidos y rechazo de campos de sobre incompatibles.
+- **Limitaciones:** la resolución de claves registradas pertenece a las fases de autorización y backend.
+- **Commit:** `feat(protocol): [TFG-F1-BE-02] preservar bytes firmados en transporte`
+- **Impacto académico:** elimina una fuente de ambigüedad entre la firma producida y la verificada.

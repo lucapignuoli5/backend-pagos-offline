@@ -23,7 +23,7 @@ Esta especificación define el intercambio implementable entre POS de Windows, A
 
 `payment_ack` repite los campos económicos y de identidad, agrega billetera, autorización offline, ID y huella de clave POS, `receipt_digest`, `accepted_at` y el estado único `LOCALLY_ACCEPTED`. El POS lo firma después de verificar y persistir el comprobante.
 
-Las firmas se transportan junto al JSON firmado; no forman parte del objeto canónico. Los consumidores deben verificar el JSON exacto recibido y no reconstruirlo desde campos deserializados.
+Las firmas se transportan en un sobre JSON canónico con exactamente dos campos: `payload_b64`, que contiene los bytes canónicos firmados en Base64 estándar, y `signature_b64`, que contiene la firma DER en Base64 estándar. Las claves públicas no viajan en el sobre: se resuelven desde el registro previo mediante el ID y la huella incluidos en el payload. El receptor decodifica y verifica los bytes de `payload_b64` antes de usar sus campos, sin reconstruir el JSON.
 
 ## APDU v2
 

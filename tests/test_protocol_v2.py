@@ -13,8 +13,10 @@ from protocol_v2 import (
     build_apdu,
     canonical_json,
     chunk_message,
+    encode_signed_envelope,
     parse_apdu,
     parse_canonical_payload,
+    parse_signed_envelope,
     sign_payload,
     validate_payload,
     verify_payload_signature,
@@ -56,6 +58,17 @@ class ProtocolV2Tests(unittest.TestCase):
                 value = changed[field]
                 changed[field] = value + "x" if isinstance(value, str) else value + 1
                 self.assertFalse(verify_payload_signature(changed, signature, public_key))
+
+    def test_signed_envelope_preserves_exact_payload_bytes(self):
+        wire = encode_signed_envelope(self.request, self.vector["signature_der_b64"])
+        envelope = parse_signed_envelope(wire)
+        self.assertEqual(envelope.payload_bytes, self.vector["canonical_request"].encode())
+        self.assertEqual(envelope.payload, self.request)
+        self.assertTrue(envelope.verify(self.vector["public_key_der_b64"]))
+
+        changed_wire = wire.replace(b"payload_b64", b"payload_data")
+        with self.assertRaises(ProtocolError):
+            parse_signed_envelope(changed_wire)
 
     def test_rejects_non_integer_and_unknown_fields(self):
         for amount in (0, -1, 100_001, 1.5, True):

@@ -145,6 +145,61 @@ def verify_payload_signature(
         return False
 
 
+@dataclass(frozen=True)
+class SignedEnvelope:
+    payload_bytes: bytes
+    payload: dict[str, Any]
+    signature_b64: str
+
+    def verify(self, public_key_b64: str) -> bool:
+        return verify_exact_signature(self.payload_bytes, self.signature_b64, public_key_b64)
+
+
+def encode_signed_envelope(payload: Mapping[str, Any], signature_b64: str) -> bytes:
+    payload_bytes = canonical_bytes(payload)
+    _decode_base64(signature_b64, "signature_b64")
+    envelope = {
+        "payload_b64": base64.b64encode(payload_bytes).decode("ascii"),
+        "signature_b64": signature_b64,
+    }
+    encoded = canonical_json(envelope).encode("utf-8")
+    if len(encoded) > MAX_MESSAGE_BYTES:
+        raise ProtocolError("El sobre firmado supera el maximo logico de 4 KiB")
+    return encoded
+
+
+def parse_signed_envelope(data: bytes) -> SignedEnvelope:
+    if not data or len(data) > MAX_MESSAGE_BYTES:
+        raise ProtocolError("Longitud de sobre firmado invalida")
+    try:
+        text = data.decode("utf-8")
+        envelope = json.loads(text)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ProtocolError("Sobre firmado invalido") from exc
+    if not isinstance(envelope, dict) or set(envelope) != {"payload_b64", "signature_b64"}:
+        raise ProtocolError("Campos de sobre firmado incompatibles")
+    if canonical_json(envelope) != text:
+        raise ProtocolError("El sobre firmado no es canonico")
+    payload_bytes = _decode_base64(envelope["payload_b64"], "payload_b64")
+    _decode_base64(envelope["signature_b64"], "signature_b64")
+    payload = parse_canonical_payload(payload_bytes)
+    return SignedEnvelope(payload_bytes, payload, envelope["signature_b64"])
+
+
+def verify_exact_signature(payload_bytes: bytes, signature_b64: str, public_key_b64: str) -> bool:
+    try:
+        public_der = base64.b64decode(public_key_b64, validate=True)
+        signature = base64.b64decode(signature_b64, validate=True)
+        public_key = serialization.load_der_public_key(public_der)
+        if not isinstance(public_key, ec.EllipticCurvePublicKey):
+            return False
+        _require_p256(public_key)
+        public_key.verify(signature, payload_bytes, ec.ECDSA(hashes.SHA256()))
+        return True
+    except (binascii.Error, InvalidSignature, ProtocolError, TypeError, ValueError):
+        return False
+
+
 def validate_payload(payload: Mapping[str, Any]) -> MessageType:
     if not isinstance(payload, Mapping):
         raise ProtocolError("El payload debe ser un objeto JSON")
@@ -266,6 +321,15 @@ def _message_type(value: Any) -> MessageType:
         return MessageType(value)
     except (TypeError, ValueError) as exc:
         raise ProtocolError("Tipo de mensaje no soportado") from exc
+
+
+def _decode_base64(value: Any, field: str) -> bytes:
+    if not isinstance(value, str) or "\n" in value or "\r" in value:
+        raise ProtocolError(f"{field} debe ser Base64 sin saltos")
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ProtocolError(f"{field} debe ser Base64 valido") from exc
 
 
 def _canonical_uuid(value: Any) -> UUID:
