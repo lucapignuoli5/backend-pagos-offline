@@ -157,3 +157,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** si una autorización ya fue parcialmente consumida, una solicitud posterior se evalúa como una nueva autorización contra el saldo aún disponible.
 - **Commit:** `fix(auth): [TFG-F3-BE-02] hacer idempotente el aprovisionamiento`
 - **Impacto académico:** documenta la tolerancia a pérdida de respuesta durante el alta inicial offline.
+
+## TFG-F3-BE-03 — Revisión de cierre de persistencia y aprovisionamiento
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** antes de iniciar el POS debía comprobarse que los cambios de autenticación y autorización no rompieran el backend.
+- **Comportamiento anterior:** las instrucciones del área todavía describían la API v2 como pendiente de demostración.
+- **Comportamiento nuevo:** se registra el estado realmente verificado y sus límites sin atribuir pruebas físicas ni uso de datos reales.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** 21 pruebas backend correctas en SQLite temporal; estado Git y formato revisados.
+- **Limitaciones:** no se abrió la base existente ni se inició el servidor; POS y ACR122U permanecen pendientes.
+- **Commit:** `docs(review): [TFG-F3-BE-03] cerrar revision de fase 3`
+- **Impacto académico:** separa evidencia automatizada del backend de la interoperabilidad física aún no demostrada.

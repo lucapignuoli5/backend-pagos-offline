@@ -26,6 +26,13 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Son criterios de revisión; no afirmar que el código ya garantiza atomicidad, idempotencia o prevención completa del doble gasto.
 - Las rutas de Mercado Pago existentes no acreditan liquidación de pagos offline; la demostración acordada usa saldos y recargas simulados.
 
+## Estado implementado verificado al 13/10/2026
+
+- La API v2 dispone de login JWT, registro de claves con prueba de posesión, autorizaciones offline, consulta de saldo, sincronización por resultado y consulta por operación.
+- La contabilidad v2 usa importes enteros en centavos, evidencia exacta, asientos únicos, actualización condicionada de saldo y estados idempotentes; las rutas heredadas no aplican movimientos v2.
+- La suite actual ejecuta 21 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto y reintento del aprovisionamiento.
+- Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio todavía no está implementado y no existe evidencia con ACR122U.
+
 ## Entorno y efectos de ejecución
 
 - Usar el entorno virtual de esta carpeta; comprobar `venv/Scripts/python.exe` antes de ejecutar comandos.
