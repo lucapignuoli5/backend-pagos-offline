@@ -1,5 +1,6 @@
 from decimal import Decimal
-from typing import Optional, Union
+from datetime import datetime
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -111,3 +112,44 @@ class RecargaResponse(BaseModel):
 class LinkPagoRequest(BaseModel):
     token_id: str = Field(..., min_length=1)
     monto: float = Field(..., gt=0)
+
+
+class KeyRegistrationRequest(BaseModel):
+    public_key_b64: str = Field(..., min_length=1, max_length=1024)
+    proof_payload_b64: str = Field(..., min_length=1, max_length=4096)
+    proof_signature_b64: str = Field(..., min_length=1, max_length=1024)
+
+
+class KeyRegistrationResponse(BaseModel):
+    key_id: str
+    fingerprint: str
+    purpose: Literal["wallet", "pos"]
+    scope_id: str
+    created: bool
+
+
+class OfflineAuthorizationRequest(BaseModel):
+    wallet_id: str = Field(..., min_length=1, max_length=120)
+    wallet_key_id: str = Field(..., min_length=1, max_length=120)
+    max_payment_cents: int = Field(..., strict=True, gt=0)
+    max_payments: int = Field(..., strict=True, gt=0)
+
+
+class OfflineAuthorizationResponse(BaseModel):
+    authorization_id: str
+    wallet_id: str
+    wallet_key_id: str
+    currency: Literal["ARS"] = "ARS"
+    max_payment_cents: int
+    max_payments: int
+    authorized_total_cents: int
+    issued_at: datetime
+    expires_at: datetime
+
+
+class WalletBalanceResponse(BaseModel):
+    wallet_id: str
+    currency: Literal["ARS"] = "ARS"
+    confirmed_balance_cents: int
+    authorized_offline_cents: int
+    available_for_authorization_cents: int

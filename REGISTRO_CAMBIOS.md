@@ -65,3 +65,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** los endpoints y la aplicación contable se implementan en unidades posteriores.
 - **Commit:** `feat(db): [TFG-F2-BE-01] agregar esquema contable v2`
 - **Impacto académico:** establece la representación persistente usada para demostrar idempotencia y atomicidad.
+
+## TFG-F2-BE-02 — Autenticación, claves y autorizaciones v2
+
+- **Fecha:** 2026-10-13
+- **Fase:** 2 — Backend seguro y contabilidad atómica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** las rutas v2 requieren identidad, rol, propiedad de billetera/terminal y claves registradas con prueba de posesión.
+- **Comportamiento anterior:** el JWT no incluía rol, el bloqueo podía afectar a todos los usuarios de una IP y las rutas heredadas no aplicaban autorización consistente.
+- **Comportamiento nuevo:** JWT incluye identidad y rol; las dependencias Bearer comprueban que el rol siga vigente; las claves P-256 se registran con prueba canónica de posesión, huella y nonce únicos; autorizaciones y saldos exigen propiedad y límites configurados.
+- **Decisión:** centralizar autenticación Bearer, registrar claves P-256 mediante prueba firmada exacta y emitir autorizaciones acotadas por los límites configurados.
+- **Archivos:** `auth.py`, `api_v2.py`, `schemas.py`, `main.py`, `tests/test_api_v2_keys.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** JWT, registro de claves, terminales, autorizaciones y consulta de saldo.
+- **Pruebas:** 10 pruebas backend correctas, incluidas prueba de posesión e idempotencia de clave, límites y propiedad de autorización, reserva del cupo autorizado y migración; importación aislada confirma rutas v2 sin crear tablas.
+- **Limitaciones:** la sincronización contable se implementa en la siguiente unidad.
+- **Commit:** `feat(api): [TFG-F2-BE-02] proteger claves y autorizaciones v2`
+- **Impacto académico:** documenta el requisito previo de claves conocidas antes de operar sin conexión.

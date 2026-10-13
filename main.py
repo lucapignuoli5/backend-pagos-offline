@@ -23,6 +23,8 @@ except ImportError:  # La integracion es opcional y esta deshabilitada por defec
 
 import models
 import schemas
+from api_v2 import router as api_v2_router
+from auth import LoginThrottle, create_access_token
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
 from migrations import backfill_wallets, run_schema_migrations
@@ -50,9 +52,9 @@ mp_sdk = (
     else None
 )
 
-BRUTE_FORCE_ATTEMPTS: dict[str, int] = {}
 JWT_ALGORITHM = "HS256"
 MAX_LOGIN_ATTEMPTS = 5
+LOGIN_THROTTLE = LoginThrottle(maximum_attempts=MAX_LOGIN_ATTEMPTS, lock_seconds=300)
 
 
 def hash_password(password: str) -> str:
@@ -130,11 +132,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(api_v2_router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    print(f"Ojo Luca, error de validación: {exc.errors()}") # Esto va a salir en tu terminal negra
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    safe_errors = [
+        {"loc": error.get("loc", ()), "type": error.get("type", "validation_error"), "msg": error.get("msg", "Dato invalido")}
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -147,13 +153,10 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Autenticacion no configurada",
         )
-    client_ip = request.client.host if request.client else "unknown"
-    fallos = BRUTE_FORCE_ATTEMPTS.get(client_ip, 0)
-
-    if fallos >= MAX_LOGIN_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Demasiados intentos fallidos")
-
     identificador = payload.usuario or payload.token_id or ""
+    client_ip = request.client.host if request.client else "unknown"
+    throttle_key = f"{client_ip}:{identificador.casefold()}"
+    LOGIN_THROTTLE.check(throttle_key)
     usuario = None
 
     if identificador.isdigit():
@@ -166,26 +169,16 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         )
 
     if usuario is None or not usuario.password_hash or not verify_password(payload.password, usuario.password_hash):
-        BRUTE_FORCE_ATTEMPTS[client_ip] = fallos + 1
+        LOGIN_THROTTLE.fail(throttle_key)
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
-    BRUTE_FORCE_ATTEMPTS.pop(client_ip, None)
-
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
-    token = jwt.encode(
-        {
-            "sub": str(usuario.id),
-            "token_id": str(usuario.id),
-            "exp": int(expires_at.timestamp()),
-        },
-        JWT_SECRET_KEY,
-        algorithm=JWT_ALGORITHM,
-    )
+    LOGIN_THROTTLE.succeed(throttle_key)
+    token, expires_in = create_access_token(usuario)
 
     return {
         "access_token": token,
         "token_type": "bearer",
-        "expires_in": 3600,
+        "expires_in": expires_in,
     }
 
 
