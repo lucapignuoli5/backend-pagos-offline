@@ -155,6 +155,26 @@ def create_offline_authorization(
         raise HTTPException(status_code=422, detail="Clave de billetera no valida")
 
     now = datetime.now(timezone.utc)
+    existing = db.query(models.OfflineAuthorization).filter(
+        models.OfflineAuthorization.wallet_id == wallet.id,
+        models.OfflineAuthorization.wallet_key_id == key.key_id,
+        models.OfflineAuthorization.max_payment_cents == request.max_payment_cents,
+        models.OfflineAuthorization.remaining_amount_cents == request.max_payment_cents * request.max_payments,
+        models.OfflineAuthorization.remaining_payments == request.max_payments,
+        models.OfflineAuthorization.active.is_(True),
+        models.OfflineAuthorization.expires_at > now,
+    ).first()
+    if existing is not None:
+        return schemas.OfflineAuthorizationResponse(
+            authorization_id=existing.id,
+            wallet_id=wallet.id,
+            wallet_key_id=key.key_id,
+            max_payment_cents=existing.max_payment_cents,
+            max_payments=existing.remaining_payments,
+            authorized_total_cents=existing.remaining_amount_cents,
+            issued_at=existing.issued_at,
+            expires_at=existing.expires_at,
+        )
     committed = db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
         models.OfflineAuthorization.wallet_id == wallet.id,
         models.OfflineAuthorization.active.is_(True),

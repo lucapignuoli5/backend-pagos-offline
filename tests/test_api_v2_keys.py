@@ -72,6 +72,18 @@ class KeyAndAuthorizationTests(unittest.TestCase):
             self.client_user,
         )
         self.assertEqual(authorization.authorized_total_cents, 1_000_000)
+        repeated = create_offline_authorization(
+            schemas.OfflineAuthorizationRequest(
+                wallet_id="wallet-1",
+                wallet_key_id="wallet-key-1",
+                max_payment_cents=100_000,
+                max_payments=10,
+            ),
+            self.db,
+            self.client_user,
+        )
+        self.assertEqual(repeated.authorization_id, authorization.authorization_id)
+        self.assertEqual(self.db.query(models.OfflineAuthorization).count(), 1)
         with self.assertRaises(HTTPException) as context:
             create_offline_authorization(
                 schemas.OfflineAuthorizationRequest(

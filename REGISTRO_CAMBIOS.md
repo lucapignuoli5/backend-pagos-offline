@@ -143,3 +143,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** todavía no descarga autorizaciones ni registra claves; no se inicia el backend sobre bases existentes.
 - **Commit:** `feat(auth): [TFG-F3-BE-01] devolver billetera del usuario`
 - **Impacto académico:** hace explícita la identidad de la billetera para vincular saldo, reservas y conciliación.
+
+## TFG-F3-BE-02 — Reintento idempotente de autorización inicial
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** una respuesta perdida durante el aprovisionamiento no debe consumir dos veces el cupo disponible.
+- **Comportamiento anterior:** repetir una solicitud idéntica encontraba el saldo ya comprometido y devolvía conflicto.
+- **Comportamiento nuevo:** una autorización activa e intacta con la misma billetera, clave y límites devuelve el mismo identificador sin crear otra fila.
+- **Archivos:** `api_v2.py`, `tests/test_api_v2_keys.py`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** suite backend completa de 21 pruebas correcta en SQLite temporal; la repetición idéntica conserva el ID y una sola fila, mientras una solicitud diferente sigue respetando el saldo comprometido.
+- **Limitaciones:** si una autorización ya fue parcialmente consumida, una solicitud posterior se evalúa como una nueva autorización contra el saldo aún disponible.
+- **Commit:** `fix(auth): [TFG-F3-BE-02] hacer idempotente el aprovisionamiento`
+- **Impacto académico:** documenta la tolerancia a pérdida de respuesta durante el alta inicial offline.
