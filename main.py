@@ -11,26 +11,45 @@ import re
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from sqlalchemy import func, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
+try:
+    import mercadopago
+except ImportError:  # La integracion es opcional y esta deshabilitada por defecto.
+    mercadopago = None
+
 import models
 import schemas
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
+from settings import (
+    CORS_ORIGINS,
+    DEMO_SEED_ENABLED,
+    DEMO_SEED_PASSWORD,
+    JWT_SECRET_KEY,
+    MERCADO_PAGO_ACCESS_TOKEN,
+    MERCADO_PAGO_ENABLED,
+    MERCADO_PAGO_NOTIFICATION_URL,
+    NGROK_AUTH_TOKEN,
+    NGROK_DOMAIN,
+    NGROK_ENABLED,
+)
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from jose import jwt
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+mp_sdk = (
+    mercadopago.SDK(MERCADO_PAGO_ACCESS_TOKEN)
+    if MERCADO_PAGO_ENABLED and MERCADO_PAGO_ACCESS_TOKEN and mercadopago is not None
+    else None
+)
+
 BRUTE_FORCE_ATTEMPTS: dict[str, int] = {}
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-change-me")
 JWT_ALGORITHM = "HS256"
 MAX_LOGIN_ATTEMPTS = 5
 
@@ -53,9 +72,17 @@ def _ensure_password_hash_column() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         _ensure_password_hash_column()
+        if not DEMO_SEED_ENABLED:
+            yield
+            return
+        if not DEMO_SEED_PASSWORD:
+            raise RuntimeError(
+                "DEMO_SEED_PASSWORD es obligatorio cuando DEMO_SEED_ENABLED esta activo"
+            )
         comercio = db.get(models.User, 1)
         if comercio is None:
             comercio = models.User(
@@ -74,11 +101,11 @@ async def lifespan(app: FastAPI):
             cliente = models.User(
                 nombre="TOKEN-USER-QR",
                 saldo_real=Decimal("100000.00"),
-                password_hash=hash_password("123456"),
+                password_hash=hash_password(DEMO_SEED_PASSWORD),
             )
             db.add(cliente)
         elif not cliente.password_hash:
-            cliente.password_hash = hash_password("123456")
+            cliente.password_hash = hash_password(DEMO_SEED_PASSWORD)
 
         db.commit()
         yield
@@ -94,7 +121,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://unfailing-bless-thrift.ngrok-free.dev"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,13 +133,16 @@ async def validation_exception_handler(request, exc):
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
-Base.metadata.create_all(bind=engine)
-
 DbSession = Annotated[Session, Depends(get_db)]
 
 
 @app.post("/api/login", response_model=schemas.LoginResponse)
 def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession) -> dict[str, object]:
+    if not JWT_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Autenticacion no configurada",
+        )
     client_ip = request.client.host if request.client else "unknown"
     fallos = BRUTE_FORCE_ATTEMPTS.get(client_ip, 0)
 
@@ -180,6 +210,94 @@ def consultar_saldo(user_id: int, db: DbSession) -> models.User:
             detail="Usuario no encontrado",
         )
     return usuario
+
+
+@app.post(
+    "/api/billetera/recargar",
+    response_model=schemas.RecargaResponse,
+)
+def recargar_saldo(payload: schemas.RecargaRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    cliente = (
+        db.query(models.User)
+        .filter(func.lower(models.User.nombre) == payload.token_id.lower())
+        .first()
+    )
+
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+
+    monto_decimal = Decimal(str(payload.monto_recarga))
+    cliente.saldo_real += monto_decimal
+    db.commit()
+    db.refresh(cliente)
+
+    return {
+        "exitoso": True,
+        "nuevo_saldo": float(cliente.saldo_real),
+    }
+
+
+@app.post("/api/billetera/crear-link-pago")
+def crear_link(payload: schemas.LinkPagoRequest) -> dict:
+    if mp_sdk is None or not MERCADO_PAGO_NOTIFICATION_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integracion de pagos externos deshabilitada",
+        )
+    preference_data = {
+        "items": [
+            {
+                "title": "Recarga Billetera Offline",
+                "quantity": 1,
+                "currency_id": "ARS",
+                "unit_price": payload.monto,
+            }
+        ],
+        "external_reference": payload.token_id,
+        "notification_url": MERCADO_PAGO_NOTIFICATION_URL,
+    }
+
+    preference_response = mp_sdk.preference().create(preference_data)
+
+    if preference_response["status"] == 201:
+        return {"init_point": preference_response["response"]["init_point"]}
+    else:
+        raise HTTPException(status_code=400, detail="Error al crear link de MP")
+
+
+@app.post("/webhook/mercadopago")
+async def mp_webhook(request: Request, db: DbSession):
+    if mp_sdk is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integracion de pagos externos deshabilitada",
+        )
+    body = await request.json()
+    topic = request.query_params.get("topic") or body.get("type") or body.get("action")
+    payment_id = request.query_params.get("id") or body.get("data", {}).get("id")
+
+    if topic in ["payment", "payment.created", "payment.updated"] and payment_id:
+        payment_info = mp_sdk.payment().get(payment_id)
+
+        if payment_info["status"] == 200:
+            payment = payment_info["response"]
+
+            if payment["status"] == "approved":
+                external_ref = payment.get("external_reference")
+                monto = Decimal(str(payment.get("transaction_amount")))
+
+                if external_ref:
+                    cliente = (
+                        db.query(models.User)
+                        .filter(func.lower(models.User.nombre) == external_ref.lower())
+                        .first()
+                    )
+                    if cliente:
+                        cliente.saldo_real += monto
+                        db.commit()
+                        print(f"✅ WEBHOOK MP: Se sumaron ${monto} a {cliente.nombre}")
+
+    return {"status": "ok"}
 
 
 @app.post("/verify-signature", response_model=schemas.SignatureVerificationResponse)
@@ -428,16 +546,16 @@ def _render_fila_dashboard(transaccion: models.TransaccionOfflineDB) -> str:
 
 
 def _validar_firma_criptografica(transaccion: schemas.OfflinePaymentSyncItem) -> None:
-    datos_originales = _payload_firmado(transaccion)
-    print(f"DEBUG BACKEND - String a verificar: '{datos_originales}'")
+    payload_str = transaccion.payload_original or _payload_firmado(transaccion)
+    print(f"DEBUG BACKEND - String a verificar: '{payload_str}'")
     print(
         "DEBUG BACKEND - SHA256 string UTF-8: "
-        f"{sha256(datos_originales.encode('utf-8')).hexdigest()}"
+        f"{sha256(payload_str.encode('utf-8')).hexdigest()}"
     )
-    if not verificar_firma(
-        transaccion.clave_publica,
-        transaccion.firma,
-        datos_originales,
+    if not verify_payment_contract_signature(
+        payload_str=payload_str,
+        signature_b64=transaccion.firma,
+        public_key_b64=transaccion.clave_publica,
     ):
         print(
             "ADVERTENCIA: firma criptografica invalida para "
@@ -616,22 +734,17 @@ def _payload_firmado(transaccion: schemas.OfflinePaymentSyncItem) -> str:
 
 if __name__ == "__main__":
     import uvicorn
-    from pyngrok import ngrok
-
-    # 1. Configurar el token de seguridad
-    ngrok.set_auth_token("2iaQVrqVAFfeumyIpp5fx3iqvaj_6GhFuY51acviSoqdyCY8H")
-
-    # 2. Abrir el túnel hacia internet (Sintaxis corregida)
     puerto = 8000
-    public_url = ngrok.connect(
-        puerto,
-        domain="unfailing-bless-thrift.ngrok-free.dev"
-    )
 
-    # 3. Imprimir la URL segura generada
-    print("=" * 55)
-    print(f"🌐 URL PÚBLICA PARA ANDROID (HTTPS): {public_url.public_url}/")
-    print("=" * 55)
+    if NGROK_ENABLED:
+        if not NGROK_AUTH_TOKEN or not NGROK_DOMAIN:
+            raise RuntimeError(
+                "NGROK_AUTH_TOKEN y NGROK_DOMAIN son obligatorios cuando NGROK_ENABLED esta activo"
+            )
+        from pyngrok import ngrok
 
-    # 4. Arrancar el servidor Uvicorn
+        ngrok.set_auth_token(NGROK_AUTH_TOKEN)
+        public_url = ngrok.connect(puerto, domain=NGROK_DOMAIN)
+        print(f"Tunel de demostracion habilitado: {public_url.public_url}")
+
     uvicorn.run("main:app", host="0.0.0.0", port=puerto, reload=True)
