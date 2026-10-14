@@ -324,3 +324,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** el simulador en memoria no representa USB, PC/SC, RF, Android real ni confirmación humana; la cifra no valida el objetivo de p95 en hardware.
 - **Commit:** `test(evidence): [TFG-F7-BE-01] medir flujo pos simulado`
 - **Impacto académico:** aporta una línea base reproducible sin presentar la meta de 500 ms como validada físicamente.
+
+## TFG-F7-RV-01 — Completar escenarios obligatorios de revisión final
+
+- **Fecha:** 2026-10-14
+- **Fase:** 7 — Evidencia final y documentación académica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el mapeo final detectó que varias condiciones obligatorias estaban cubiertas solo de manera implícita y no tenían una prueba nominal independiente.
+- **Comportamiento anterior:** clave revocada, duplicados y flujo idempotente estaban probados, pero no clave desconocida, firmante ajeno, terminal incorrecta, ventana vencida, nonce reutilizado, acuse perdido, segundo acercamiento interrumpido ni fallo posterior a actualizar ambos saldos.
+- **Comportamiento nuevo:** cada escenario devuelve rechazo, conflicto o reintento según contrato; los cortes de transporte se recuperan sin duplicar y los fallos SQL revierten autorización, saldos, operación y asientos.
+- **Decisión:** agregar evidencia específica sin cambiar la lógica que ya satisfacía los contratos.
+- **Archivos:** `tests/test_sync_v2.py`, `tests/test_pos_desktop.py`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** ninguno.
+- **Pruebas:** suite completa de 41 pruebas correcta en bases temporales; seis casos nuevos cubren las condiciones enumeradas.
+- **Limitaciones:** continúan pendientes las mismas pruebas físicas e instrumentadas; los cortes se simulan en el transporte en memoria.
+- **Commit:** `test(review): [TFG-F7-RV-01] completar escenarios obligatorios`
+- **Impacto académico:** hace trazable la matriz de pruebas mínimas y evita inferir cobertura a partir de casos más amplios.

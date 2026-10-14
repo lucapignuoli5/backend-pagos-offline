@@ -13,6 +13,7 @@ from pos_desktop.service import PosService
 from pos_desktop.simulator import AndroidHceSimulator, SimulatorTransport
 from pos_desktop.sync import PosSyncService
 from protocol_v2 import encode_signed_envelope, parse_signed_envelope, sign_payload
+from protocol_v2 import INS_GET_RECEIPT, INS_PUT_ACK, SELECT_APDU, parse_apdu
 
 
 class ReversibleTestProtector:
@@ -70,6 +71,41 @@ class PosDesktopTests(unittest.TestCase):
         self.assertIsNotNone(stored.receipt_envelope)
         self.assertIsNotNone(stored.ack_envelope)
         self.assertEqual(self.simulator.acks[operation.operation_id], stored.ack_envelope)
+
+    def test_lost_ack_response_is_retried_without_duplicate_operation(self):
+        operation = self.service.create_payment(2_000)
+        self.service.deliver_request(operation.operation_id)
+        self.simulator.confirm(operation.operation_id)
+        dropped = [False]
+        self.service.transport_factory = lambda: InterruptingTransport(
+            self.simulator, INS_PUT_ACK, dropped
+        )
+        with self.assertRaises(OSError):
+            self.service.collect_receipt(operation.operation_id)
+        stored = self.database.get_operation(operation.operation_id)
+        self.assertEqual(stored.state, "LOCALLY_ACCEPTED")
+        self.assertIsNotNone(stored.ack_envelope)
+
+        self.service.transport_factory = lambda: SimulatorTransport(self.simulator)
+        self.assertEqual(self.service.collect_receipt(operation.operation_id), "LOCALLY_ACCEPTED")
+        self.assertEqual(len(self.database.list_operations()), 1)
+
+    def test_interrupted_second_approach_persists_nothing_and_retries(self):
+        operation = self.service.create_payment(2_000)
+        self.service.deliver_request(operation.operation_id)
+        self.simulator.confirm(operation.operation_id)
+        dropped = [False]
+        self.service.transport_factory = lambda: InterruptingTransport(
+            self.simulator, INS_GET_RECEIPT, dropped
+        )
+        with self.assertRaises(OSError):
+            self.service.collect_receipt(operation.operation_id)
+        stored = self.database.get_operation(operation.operation_id)
+        self.assertIsNone(stored.receipt_envelope)
+        self.assertIsNone(stored.ack_envelope)
+
+        self.service.transport_factory = lambda: SimulatorTransport(self.simulator)
+        self.assertEqual(self.service.collect_receipt(operation.operation_id), "LOCALLY_ACCEPTED")
 
     def test_unconfirmed_request_remains_waiting_without_acceptance(self):
         operation = self.service.create_payment(1_000)
@@ -172,6 +208,25 @@ class PosDesktopTests(unittest.TestCase):
         self.simulator.confirm(operation.operation_id)
         self.service.collect_receipt(operation.operation_id)
         return operation.operation_id
+
+
+class InterruptingTransport(SimulatorTransport):
+    def __init__(self, simulator, instruction: int, dropped: list[bool]):
+        super().__init__(simulator)
+        self.instruction = instruction
+        self.dropped = dropped
+
+    def transceive(self, apdu: bytes) -> bytes:
+        response = super().transceive(apdu)
+        if apdu not in {SELECT_APDU, SELECT_APDU + b"\x00"}:
+            command = parse_apdu(apdu)
+            is_drop_point = command.instruction == self.instruction and (
+                self.instruction != INS_PUT_ACK or command.is_last
+            )
+            if is_drop_point and not self.dropped[0]:
+                self.dropped[0] = True
+                raise OSError("intercambio interrumpido")
+        return response
 
 
 if __name__ == "__main__":

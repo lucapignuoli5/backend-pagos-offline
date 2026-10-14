@@ -18,6 +18,7 @@ from database import Base
 from protocol_v2 import (
     encode_public_key,
     encode_signed_envelope,
+    parse_signed_envelope,
     payload_digest,
     public_key_fingerprint,
     sign_payload,
@@ -137,6 +138,50 @@ class SyncV2Tests(unittest.TestCase):
         self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
         self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
 
+    def test_unregistered_and_foreign_wallet_signers_are_rejected(self):
+        _, completed = self._evidence("123e4567-e89b-42d3-a456-426614174030", 1_000)
+        unknown = self._resign_evidence(
+            completed,
+            receipt_updates={"wallet_key_id": "wallet-key-unknown", "wallet_key_fingerprint": "0" * 64},
+        )
+        self.assertEqual(process_evidence(self.db, self.client, unknown).status, "REJECTED")
+
+        other_private = ec.generate_private_key(ec.SECP256R1())
+        foreign = self._resign_evidence(completed, receipt_signer=other_private)
+        self.assertEqual(process_evidence(self.db, self.client, foreign).status, "REJECTED")
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
+        self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
+
+    def test_expired_window_and_unknown_terminal_are_rejected(self):
+        _, completed = self._evidence("123e4567-e89b-42d3-a456-426614174031", 1_000)
+        expired = self._resign_evidence(
+            completed,
+            common_updates={
+                "issued_at": "2026-10-14T15:00:00Z",
+                "expires_at": "2026-10-14T15:02:00Z",
+                "accepted_at": "2026-10-14T15:01:00Z",
+            },
+        )
+        wrong_terminal = self._resign_evidence(
+            completed,
+            common_updates={"terminal_id": "terminal-unknown"},
+        )
+        self.assertEqual(process_evidence(self.db, self.client, expired).status, "REJECTED")
+        self.assertEqual(process_evidence(self.db, self.client, wrong_terminal).status, "REJECTED")
+
+    def test_reused_nonce_with_another_operation_is_conflict(self):
+        _, first = self._evidence("123e4567-e89b-42d3-a456-426614174032", 1_000)
+        self.assertEqual(process_evidence(self.db, self.client, first).status, "ACCEPTED")
+        first_request = parse_signed_envelope(base64.b64decode(first.request_envelope_b64)).payload
+        _, second = self._evidence("123e4567-e89b-42d3-a456-426614174033", 1_000)
+        reused = self._resign_evidence(
+            second,
+            common_updates={"nonce": first_request["nonce"]},
+        )
+        result = process_evidence(self.db, self.client, reused)
+        self.assertEqual((result.status, result.code), ("CONFLICT", "NONCE_REUSED"))
+
     def test_mixed_batch_keeps_individual_results(self):
         pending, _ = self._evidence("123e4567-e89b-42d3-a456-426614174005", 1_000)
         invalid = schemas.OfflinePaymentEvidence(
@@ -201,7 +246,27 @@ class SyncV2Tests(unittest.TestCase):
         self.db.expire_all()
         self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
         self.assertEqual(self.db.get(models.Wallet, "wallet-2").confirmed_balance_cents, 0)
+        self.assertEqual(self.db.get(models.OfflineAuthorization, "authorization-1").remaining_amount_cents, 10_000)
         self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
+        self.assertIsNone(self.db.get(models.OfflinePaymentV2, completed.operation_id))
+
+    def test_failure_after_balance_updates_rolls_back_every_movement(self):
+        _, completed = self._evidence("123e4567-e89b-42d3-a456-426614174034", 2_000)
+        self.db.execute(
+            text(
+                "CREATE TRIGGER fail_ledger BEFORE INSERT ON ledger_entries "
+                "BEGIN SELECT RAISE(ABORT, 'simulated ledger failure'); END"
+            )
+        )
+        self.db.commit()
+        result = process_evidence(self.db, self.client, completed)
+        self.assertEqual(result.status, "RETRYABLE_ERROR")
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 10_000)
+        self.assertEqual(self.db.get(models.Wallet, "wallet-2").confirmed_balance_cents, 0)
+        self.assertEqual(self.db.get(models.OfflineAuthorization, "authorization-1").remaining_amount_cents, 10_000)
+        self.assertEqual(self.db.query(models.LedgerEntry).count(), 0)
+        self.assertIsNone(self.db.get(models.OfflinePaymentV2, completed.operation_id))
 
     def _registered_key(self, key_id, private_key, owner_id, purpose, wallet_id=None, terminal_id=None):
         public_b64 = encode_public_key(private_key.public_key())
@@ -267,6 +332,38 @@ class SyncV2Tests(unittest.TestCase):
             update={"ack_envelope_b64": base64.b64encode(ack_wire).decode()}
         )
         return pending, complete
+
+    def _resign_evidence(
+        self,
+        evidence: schemas.OfflinePaymentEvidence,
+        common_updates: dict | None = None,
+        receipt_updates: dict | None = None,
+        receipt_signer=None,
+    ) -> schemas.OfflinePaymentEvidence:
+        request = dict(parse_signed_envelope(base64.b64decode(evidence.request_envelope_b64)).payload)
+        receipt = dict(parse_signed_envelope(base64.b64decode(evidence.receipt_envelope_b64)).payload)
+        ack = dict(parse_signed_envelope(base64.b64decode(evidence.ack_envelope_b64)).payload)
+        updates = dict(common_updates or {})
+        accepted_at = updates.pop("accepted_at", None)
+        for payload in (request, receipt, ack):
+            payload.update(updates)
+        if accepted_at is not None:
+            ack["accepted_at"] = accepted_at
+        receipt.update(receipt_updates or {})
+        receipt["request_digest"] = payload_digest(request)
+        ack["receipt_digest"] = payload_digest(receipt)
+        request_wire = encode_signed_envelope(request, sign_payload(request, self.pos_private))
+        receipt_wire = encode_signed_envelope(
+            receipt,
+            sign_payload(receipt, receipt_signer or self.wallet_private),
+        )
+        ack_wire = encode_signed_envelope(ack, sign_payload(ack, self.pos_private))
+        return schemas.OfflinePaymentEvidence(
+            operation_id=evidence.operation_id,
+            request_envelope_b64=base64.b64encode(request_wire).decode(),
+            receipt_envelope_b64=base64.b64encode(receipt_wire).decode(),
+            ack_envelope_b64=base64.b64encode(ack_wire).decode(),
+        )
 
 
 if __name__ == "__main__":
