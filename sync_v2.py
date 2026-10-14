@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from clock import utc_now
 from auth import get_current_user
 from database import get_db
 from protocol_v2 import (
@@ -224,7 +225,7 @@ def _apply_payment(
     context: EvidenceContext,
 ) -> schemas.OfflinePaymentResultV2:
     amount = payment.amount_cents
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     authorization_update = db.execute(
         update(models.OfflineAuthorization)
         .where(

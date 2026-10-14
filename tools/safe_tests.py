@@ -86,7 +86,10 @@ def main() -> int:
                     value = cls(2026, 10, 13, 15, 0, 30, tzinfo=timezone.utc)
                     return value.astimezone(tz) if tz else value.replace(tzinfo=None)
 
-            stack.enter_context(patch.object(sync_v2, 'datetime', LegacyClock))
+            stack.enter_context(patch.object(
+                sync_v2, 'utc_now',
+                lambda: LegacyClock(2026, 10, 13, 15, 0, 30, tzinfo=timezone.utc),
+            ))
         suite = unittest.defaultTestLoader.discover(str(ROOT / 'tests'))
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         return 0 if result.wasSuccessful() else 1

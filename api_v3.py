@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from clock import utc_now
 from auth import get_current_user, require_role
 from database import get_db
 from issuer_keys import IssuerIdentity
@@ -45,7 +46,7 @@ def issue_authorization_v3(
         issuer = IssuerIdentity.load_external(issuer_path, issuer_pin)
     except Exception as exc:
         raise HTTPException(503, "Emisor v3 no disponible") from exc
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = utc_now().replace(microsecond=0)
     total = request.max_payment_cents * request.max_payments
     committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents), 0)).filter(
         models.OfflineCommitment.wallet_id == wallet.id, models.OfflineCommitment.closed.is_(False)

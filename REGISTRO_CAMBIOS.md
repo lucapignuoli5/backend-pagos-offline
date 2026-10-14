@@ -472,3 +472,13 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** DPAPI, Qt, PC/SC y ACR122U quedan con validación pendiente; el entorno Python 3.14 actual no instala `pyscard`.
 - **Commit:** `feat(pos): [TFG-C4-POS-01] completar recuperacion y perfil offline`
+## TFG-C6-BE-01 — Reloj controlable y entorno reproducible
+
+- **Fecha:** 2026-10-14
+- **Fase:** C6
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** autenticación, autorizaciones y conciliación usan una fuente UTC única sustituible; el ejecutor aislado congela el símbolo correcto y mantiene SQLite temporal, integraciones deshabilitadas y red externa bloqueada. Las dependencias verificables permanecen fijadas en el lock existente.
+- **Archivos:** `clock.py`, `auth.py`, `api_v2.py`, `api_v3.py`, `sync_v2.py`, `tools/safe_tests.py`, `docs/safe_verification.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** compilación, suites, lint, instrumentadas y hardware quedan agrupados para validación posterior.
+- **Commit:** `refactor(env): [TFG-C6-BE-01] centralizar reloj verificable`

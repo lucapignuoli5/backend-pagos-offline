@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from clock import utc_now
 from auth import get_current_user, require_role
 from database import get_db
 from protocol_v2 import ID_PATTERN, canonical_json, public_key_fingerprint, verify_exact_signature
@@ -80,7 +81,7 @@ def register_key(
     if payload.get("purpose") not in {"wallet", "pos"}:
         raise HTTPException(status_code=422, detail="Proposito de clave invalido")
     issued_at = _parse_utc(payload.get("issued_at"), "issued_at")
-    if abs((datetime.now(timezone.utc) - issued_at).total_seconds()) > 300:
+    if abs((utc_now() - issued_at).total_seconds()) > 300:
         raise HTTPException(status_code=422, detail="Prueba de posesion vencida")
     nonce = payload.get("nonce")
     if not isinstance(nonce, str) or not 16 <= len(nonce) <= 120:
@@ -189,7 +190,7 @@ def create_offline_authorization(
     if key is None or key.revoked or key.owner_user_id != user.id or key.wallet_id != wallet.id or key.purpose != "wallet":
         raise HTTPException(status_code=422, detail="Clave de billetera no valida")
 
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = utc_now().replace(microsecond=0)
     with _AUTH_LOCK:
         existing = db.query(models.OfflineAuthorization).filter(
             models.OfflineAuthorization.wallet_id == wallet.id,
@@ -254,7 +255,7 @@ def get_wallet_balance(wallet_id: str, db: DbSession, user: CurrentUser) -> sche
         raise HTTPException(status_code=404, detail="Billetera no encontrada")
     if wallet.user_id != user.id:
         raise HTTPException(status_code=403, detail="Billetera no autorizada")
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     authorized = int(
         db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
             models.OfflineAuthorization.wallet_id == wallet.id,

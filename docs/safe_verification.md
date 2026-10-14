@@ -4,6 +4,8 @@ Ejecutar `python -B tools/safe_tests.py --legacy-clock` desde la raíz del repos
 
 `--legacy-clock` congela exclusivamente el reloj de sincronización v2 para reproducir su fixture histórica. No demuestra conciliación tardía ni corrige el defecto R04. Las pruebas nuevas deben usar reloj inyectado y escenarios temporales independientes.
 
+El código de aplicación usa `clock.utc_now` como fuente única reemplazable. Las verificaciones deben sustituir esa función o el símbolo importado por el módulo bajo prueba; no dependen de la fecha real del equipo.
+
 El perfil PC/SC será CPython 3.13 x64 y pyscard 2.3.1 en un entorno separado; el entorno anterior se conserva. Instalar dependencias nunca implica abrir la base ni iniciar integraciones. Los resultados concretos y la versión instalada se registran en REGISTRO_CAMBIOS.md.
 
 Hardware ACR122U, HCE físico y pruebas instrumentadas requieren evidencia separada. Las bases históricas y los DOCX/PDF académicos no son destinos de las verificaciones.

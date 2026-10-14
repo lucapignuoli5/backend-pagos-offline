@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from settings import JWT_SECRET_KEY
+from clock import utc_now
 
 
 JWT_ALGORITHM = "HS256"
@@ -22,7 +23,7 @@ security = HTTPBearer(auto_error=False)
 def create_access_token(user: models.User) -> tuple[str, int]:
     if not JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY no configurada")
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=TOKEN_LIFETIME_SECONDS)
+    expires_at = utc_now() + timedelta(seconds=TOKEN_LIFETIME_SECONDS)
     token = jwt.encode(
         {
             "sub": str(user.id),
@@ -72,7 +73,7 @@ class LoginThrottle:
         self._lock = threading.Lock()
 
     def check(self, key: str, now: datetime | None = None) -> None:
-        current = now or datetime.now(timezone.utc)
+        current = now or utc_now()
         with self._lock:
             attempts, last_failure = self._failures.get(key, (0, current))
             if attempts < self.maximum_attempts:
@@ -83,7 +84,7 @@ class LoginThrottle:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiados intentos fallidos")
 
     def fail(self, key: str, now: datetime | None = None) -> None:
-        current = now or datetime.now(timezone.utc)
+        current = now or utc_now()
         with self._lock:
             attempts, _ = self._failures.get(key, (0, current))
             self._failures[key] = (attempts + 1, current)
