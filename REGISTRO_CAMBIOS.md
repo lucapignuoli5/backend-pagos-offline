@@ -440,7 +440,7 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Decisión:** agregar tablas y migraciones aditivas; no modificar ni recalcular datos históricos existentes.
 - **Archivos:** `models.py`, `schemas.py`, `api_v3.py`, `main.py`, `REGISTRO_CAMBIOS.md`.
 - **Contratos/datos:** nuevas tablas v3; datos v2 conservados byte a byte.
-- **Pruebas:** `py_compile` correcto y `git diff --check` limpio; falta ejecutar pruebas HTTP aisladas sobre una base temporal.
+- **Pruebas:** `py_compile`, `git diff --check`, persistencia temporal y unicidad de emisiones correctos; falta ejecutar pruebas HTTP aisladas del flujo firmado completo.
 - **Limitaciones:** no habilitar pagos reales ni integración Mercado Pago; la resolución final está persistida y la deduplicación usa una restricción por autorización/operación, pero falta evidencia HTTP/concurrente antes del cierre.
 - **Commit:** `feat(api): [TFG-C2-BE-03] incorporar compromisos y cierre v3` (`ca23bac`).
 - **Impacto académico:** demostrar contabilidad y recuperación v3, separadas de la compatibilidad histórica v2.
