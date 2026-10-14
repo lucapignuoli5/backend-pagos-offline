@@ -34,6 +34,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Android y POS tienen colas durables independientes que envían la misma evidencia y aplican cada resultado; el backend conserva una única aplicación contable aunque llegue primero cualquiera de los dos.
 - Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio está implementado con SQLite, DPAPI, PySide6, adaptadores PC/SC/simulador y pruebas del flujo completo simulado; no existe todavía evidencia con ACR122U.
 - Mercado Pago permanece deshabilitado por defecto; el webhook registra de forma única cada pago externo y sus pruebas usan exclusivamente un SDK simulado.
+- La revisión conjunta de Fase 6 repitió 33 pruebas backend y 24 JVM Android, compilación y lint; QR/TCP y lector NFC móvil usan v2, pero su ejecución física continúa pendiente.
 
 ## Estado del POS verificado al 14/10/2026
 

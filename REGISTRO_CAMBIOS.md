@@ -292,3 +292,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se usarán credenciales ni servicios reales.
 - **Commit:** `fix(integration): [TFG-F6-BE-01] hacer idempotente el webhook simulado`
 - **Impacto académico:** delimita la recarga externa como integración opcional y separada del pago offline.
+
+## TFG-F6-RV-01 — Revisar integraciones y flujos secundarios
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos secundarios e integraciones
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** cerrar la fase solo después de revisar webhook, configuración, canales móviles, datos sensibles y regresiones en ambos repositorios.
+- **Comportamiento anterior:** las unidades estaban probadas por separado, sin una evidencia consolidada posterior a todos los cambios de fase.
+- **Comportamiento nuevo:** la integración externa permanece deshabilitada por defecto e idempotente en simulación; Android usa solicitud, comprobante y acuse v2 para QR/TCP y lector NFC móvil, sin registro HTTP sensible y con configuración externa efectiva.
+- **Decisión:** conservar Mercado Pago como integración opcional, mantener los canales móviles como secundarios y habilitar la fase 7 únicamente después de repetir las suites completas y revisar los estados Git.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`; las correcciones de revisión Android se registran en su repositorio con el mismo ID.
+- **Contratos o datos afectados:** ninguno adicional; se confirmó el contrato v2 compartido y el aislamiento de la integración externa.
+- **Pruebas:** 33 pruebas backend en SQLite temporal; 24 pruebas JVM Android, APK debug, compilación instrumentada y lint desde resolución limpia; búsquedas estáticas de secretos y trazas sensibles.
+- **Limitaciones:** no se ejecutaron servicios de pago reales, dos teléfonos físicos, ACR122U ni mediciones de latencia.
+- **Commit:** `docs(review): [TFG-F6-RV-01] cerrar flujos secundarios`
+- **Impacto académico:** acredita código y simuladores, manteniendo explícita la evidencia física y experimental pendiente.
