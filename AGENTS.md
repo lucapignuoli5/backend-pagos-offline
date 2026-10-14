@@ -26,17 +26,19 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Son criterios de revisión; no afirmar que el código ya garantiza atomicidad, idempotencia o prevención completa del doble gasto.
 - Las rutas de Mercado Pago existentes no acreditan liquidación de pagos offline; la demostración acordada usa saldos y recargas simulados.
 
-## Estado implementado verificado al 13/10/2026
+## Estado implementado verificado al 14/10/2026
 
 - La API v2 dispone de login JWT, registro de claves con prueba de posesión, autorizaciones offline, consulta de saldo, sincronización por resultado y consulta por operación.
 - La contabilidad v2 usa importes enteros en centavos, evidencia exacta, asientos únicos, actualización condicionada de saldo y estados idempotentes; las rutas heredadas no aplican movimientos v2.
-- La suite actual ejecuta 21 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto y reintento del aprovisionamiento.
+- La suite actual ejecuta 31 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto, ambos órdenes de conciliación y reintento del aprovisionamiento.
+- Android y POS tienen colas durables independientes que envían la misma evidencia y aplican cada resultado; el backend conserva una única aplicación contable aunque llegue primero cualquiera de los dos.
 - Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio está implementado con SQLite, DPAPI, PySide6, adaptadores PC/SC/simulador y pruebas del flujo completo simulado; no existe todavía evidencia con ACR122U.
 
-## Estado del POS verificado al 13/10/2026
+## Estado del POS verificado al 14/10/2026
 
 - `pos_desktop/` implementa acceso, importe, solicitud, espera, aceptación local, historial, configuración externa y tareas fuera del hilo de interfaz.
-- Siete pruebas específicas cubren el flujo de dos acercamientos, reintento, comprobante alterado, importe cambiado con firma válida, espera sin aceptación, DPAPI real y construcción de UI.
+- Nueve pruebas específicas cubren el flujo de dos acercamientos, reintento, comprobante alterado, importe cambiado con firma válida, espera sin aceptación, DPAPI real, migración de cola, lote mixto y construcción de UI.
+- La cola SQLite v2 conserva intentos, próxima ejecución y resultado individual; la interfaz usa el mismo servicio durable para conciliar.
 - PySide6 se validó en modo offscreen. `pyscard` no pudo compilarse con Python 3.14 por falta de un wheel y de Microsoft C++ Build Tools; el adaptador permanece verificado solo por sintaxis hasta disponer de un entorno compatible y del lector.
 
 ## Entorno y efectos de ejecución
@@ -54,6 +56,6 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 
 - Para sintaxis, usar `ast.parse` sobre fuentes sin importarlas ni generar bytecode.
 - En la inspección inicial se comprobó sintaxis Python; no se ejecutaron API, conciliación ni integraciones externas.
-- No se encontró una suite de pruebas de pagos del backend; no presentar un comando pytest como prueba existente.
+- La suite vigente se ejecuta con `.\venv\Scripts\python.exe -m unittest discover -s tests -v`; no usar `pytest` salvo que se agregue explícitamente como dependencia.
 - Para cambios funcionales, verificar validación, firma inválida, duplicados, saldo insuficiente, fallos parciales y rollback en entorno aislado.
 - Revisar que contratos y estados resultantes sean interpretados correctamente por Android; informar pruebas ejecutadas y limitaciones.

@@ -261,3 +261,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** prueba el orden lógico del servidor; la entrega física sigue pendiente del ACR122U.
 - **Commit:** `test(sync): [TFG-F5-BE-01] verificar ambos ordenes de conciliacion`
 - **Impacto académico:** aporta evidencia reproducible de conciliación independiente sin doble aplicación.
+
+## TFG-F5-RV-01 — Revisión de cierre de conciliación independiente
+
+- **Fecha:** 2026-10-14
+- **Fase:** 5 — Conciliación independiente
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** antes de adaptar flujos secundarios debe comprobarse que backend, POS y Android conservan contratos, idempotencia, reservas y resultados individuales.
+- **Comportamiento anterior:** las unidades de conciliación estaban implementadas, pero las instrucciones aún informaban conteos y estado anteriores.
+- **Comportamiento nuevo:** las instrucciones reflejan 31 pruebas, nueve pruebas POS, colas independientes y ambos órdenes; los contratos y estados coinciden con Android.
+- **Decisión:** repetir las suites aisladas, revisar estados Git y documentar por separado la evidencia automatizada y las pruebas físicas pendientes.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`; registro consolidado e instrucciones generales fuera del repositorio.
+- **Pruebas:** puerta final correcta: 31 pruebas `unittest` en bases temporales; Android completa 16 pruebas JVM, APK debug, compilación instrumentada y lint. Diffs y estados Git revisados.
+- **Limitaciones:** no se inicia la API, no se usan bases existentes ni servicios externos; hardware pendiente.
+- **Commit:** `docs(review): [TFG-F5-RV-01] cerrar conciliacion independiente`
+- **Impacto académico:** fija la evidencia que habilita la adaptación de QR/TCP sin sobredimensionar el resultado.
