@@ -17,7 +17,7 @@ from auth import get_current_user, require_role
 from database import get_db
 from issuer_keys import IssuerIdentity
 from protocol_v3 import parse_signed_envelope, validate_close_manifest, verify_authorization
-from sync_v2 import process_evidence
+from sync_v3 import process_evidence_v3
 from settings import MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
 router = APIRouter(prefix="/api/v3")
@@ -120,7 +120,7 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
 def sync_v3(request: schemas.OfflinePaymentSyncV2Request, db: DbSession, user: CurrentUser):
     results = []
     for evidence in request.operations:
-        result = process_evidence(db, user, evidence)
+        result = process_evidence_v3(db, user, evidence)
         results.append(result)
         if result.status == "ACCEPTED":
             payment = db.get(models.OfflinePaymentV2, evidence.operation_id)

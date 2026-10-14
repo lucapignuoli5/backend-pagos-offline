@@ -444,3 +444,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no habilitar pagos reales ni integración Mercado Pago.
 - **Commit:** `feat(api): [TFG-C2-BE-03] incorporar compromisos y cierre v3` (`ca23bac`).
 - **Impacto académico:** demostrar contabilidad y recuperación v3, separadas de la compatibilidad histórica v2.
+
+## TFG-C2-BE-04 — Separación del procesador v3
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** PARCIAL
+- **Hallazgo:** R03/R04; la ruta HTTP v3 invocaba directamente el adaptador v2.
+- **Anterior:** `api_v3.py` importaba `process_evidence` desde `sync_v2.py`.
+- **Nuevo:** el núcleo de procesamiento quedó explicitado como `process_evidence_core`; v2 conserva su adaptador y v3 utiliza `sync_v3.py` con una entrada propia.
+- **Archivos:** `api_v3.py`, `sync_v2.py`, `sync_v3.py`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por instrucción del usuario; se verificó únicamente el diff.
+- **Limitación:** el núcleo aún comparte reglas de persistencia con compatibilidad histórica; requiere pruebas HTTP y de concurrencia antes de declarar C2 comprobada.
+- **Commit:** `refactor(sync): [TFG-C2-BE-04] separar entrada de procesamiento v3`
+- **Impacto académico:** deja explícita la frontera de API v3 y evita que la ruta HTTP dependa directamente del adaptador v2.

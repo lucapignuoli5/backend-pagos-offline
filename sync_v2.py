@@ -55,7 +55,7 @@ def get_offline_payment_v2(
     )
 
 
-def process_evidence(
+def process_evidence_core(
     db: Session,
     user: models.User,
     evidence: schemas.OfflinePaymentEvidence,
@@ -343,3 +343,8 @@ def _as_utc(value: datetime) -> datetime:
 
 def _result(operation_id: str, status: str, code: str | None = None) -> schemas.OfflinePaymentResultV2:
     return schemas.OfflinePaymentResultV2(operation_id=operation_id, status=status, code=code)
+
+
+def process_evidence(db: Session, user: models.User, evidence: schemas.OfflinePaymentEvidence) -> schemas.OfflinePaymentResultV2:
+    """Adaptador de compatibilidad para el endpoint v2."""
+    return process_evidence_core(db, user, evidence)
