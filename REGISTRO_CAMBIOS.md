@@ -340,3 +340,23 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** continúan pendientes las mismas pruebas físicas e instrumentadas; los cortes se simulan en el transporte en memoria.
 - **Commit:** `test(review): [TFG-F7-RV-01] completar escenarios obligatorios`
 - **Impacto académico:** hace trazable la matriz de pruebas mínimas y evita inferir cobertura a partir de casos más amplios.
+
+
+## TFG-C0-BE-01 — Preparar correcciones de auditoría
+
+- **Fecha:** 2026-10-14
+- **Fase:** C0
+- **Estado:** COMPROBADO
+- **Hallazgos:** R31, R32; matriz de seguimiento R01–R34.
+- **Anterior:** cierre previo con pruebas parciales y defectos de integración diagnosticados.
+- **Nuevo previsto:** línea base explícita, verificaciones aisladas y contrato v3 planificado.
+- **Decisión:** conservar datos y evidencia v2; commits locales, sin push ni pagos reales.
+- **Base Git:** `9abecf0`, árbol limpio antes de la unidad.
+- **Archivos:** AGENTS.md, REGISTRO_CAMBIOS.md, main.py (anotaciones diferidas), tools/safe_tests.py, tests/test_safe_tests.py, docs/safe_verification.md, requirements-verification.lock y evidence/c0_preserved_files.json.
+- **Contratos/datos:** ninguna migración ejecutada; v3 todavía no implementado.
+- **Pruebas:** revisión independiente C0 aprobada; estados Git y diff-check correctos; hashes de ambas bases y ambos Word conservados. Backend completa 43 pruebas con CPython 3.13.13 en base temporal y reloj histórico explícito; pyscard 2.3.1 importado sin acceder al lector. Android solo cambia guías/instrucciones y no requiere repetir el build de código.
+- **Limitaciones:** ACR122U y Android físico no disponibles.
+- **Commit:** `chore(audit): [TFG-C0-BE-01] preparar correcciones trazables`
+- **Impacto académico:** separar auditoría, implementación y evidencia; no actualizar Entrega 4.
+
+- **Incidencia de entorno:** el primer intento CPython 3.13 falló al evaluar una anotación legacy `ec`; se añadió evaluación diferida. No se corrigen aún esas funciones heredadas ni R19. El entorno anterior se conserva y el nuevo está fuera del repositorio.

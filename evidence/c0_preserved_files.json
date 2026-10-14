@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-14",
+  "android_head": "afa7dd1",
+  "backend_head": "9abecf0",
+  "scope": "hash only; databases not opened",
+  "files": {
+    "Trabajo Final Codeo/Prototipo Pagos Offline/offline_payments.db": "0a5347f4ea6da98d97492279c63378e3049d13e3550312d30c1e8d0d509a6bf1",
+    "Trabajo Final Codeo/Prototipo Pagos Offline/transacciones.db": "35cdc7eb001a21c2eb04d3ecc6418e156909bbc1343aed9abdab54be53cba5fa",
+    "Trabajo Final Documentacion/Entrega_4_Desarrollo_Metodologico_Planificacion.docx": "d3990cba17d8d24aa5e6a989fb3fd3a654104725d8ae4a13844d79bbf7583c1c",
+    "Trabajo Final Documentacion/Entrega_4_Desarrollo_Metodologico_Planificacion_Actualizada_2026-10-14.docx": "151ced4ed0267df921ec229bbbe9840f39f14613ed643b111027dd0355301781"
+  }
+}

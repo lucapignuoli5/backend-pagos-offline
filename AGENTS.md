@@ -49,7 +49,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Usar el entorno virtual de esta carpeta; comprobar `venv/Scripts/python.exe` antes de ejecutar comandos.
 - Instalación de dependencias, solo cuando la tarea lo requiera: `.\venv\Scripts\python.exe -m pip install -r requirements.txt`.
 - Arranque intencional: `.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000`.
-- No arrancar ni importar `main.py` para una inspección estática: crea tablas al importar y su lifespan puede modificar datos.
+- No arrancar `main.py` sobre datos existentes: su lifespan crea/migra tablas y puede modificar datos. La importación actual no crea tablas; cualquier prueba que importe la aplicación debe fijar base temporal e integraciones desactivadas antes de importar.
 - La base configurada en `database.py` es SQLite con ruta relativa al directorio de ejecución; verificar el destino antes de correr.
 - Ejecutar `main.py` directamente puede activar un túnel; revisar integraciones y credenciales sin reproducir sus valores.
 - Las pruebas que ejecuten la aplicación requieren un entorno de prueba aislado y no deben alcanzar bases históricas ni servicios de pagos reales.
@@ -62,3 +62,8 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La suite vigente se ejecuta con `.\venv\Scripts\python.exe -m unittest discover -s tests -v`; no usar `pytest` salvo que se agregue explícitamente como dependencia.
 - Para cambios funcionales, verificar validación, firma inválida, duplicados, saldo insuficiente, fallos parciales y rollback en entorno aislado.
 - Revisar que contratos y estados resultantes sean interpretados correctamente por Android; informar pruebas ejecutadas y limitaciones.
+
+
+## Plan correctivo vigente
+
+La auditoría R01–R34 invalida el cierre integral previo. C0 está en preparación; v3 todavía no está implementado. Seguir las decisiones correctivas de la raíz, preservar datos v2 y registrar cada cambio antes de implementarlo. No avanzar de fase sin revisión independiente.
