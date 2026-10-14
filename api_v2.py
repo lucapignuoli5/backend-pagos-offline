@@ -181,6 +181,7 @@ def create_offline_authorization(
     db: DbSession,
     user: Annotated[models.User, Depends(require_role("cliente"))],
 ) -> schemas.OfflineAuthorizationResponse:
+    raise HTTPException(status_code=410, detail="Emision v2 retirada; use /api/v3/offline-authorizations")
     if request.max_payment_cents > MAX_PAYMENT_CENTS or request.max_payments > MAX_OFFLINE_PAYMENTS:
         raise HTTPException(status_code=422, detail="Limites de autorizacion excedidos")
     wallet = db.get(models.Wallet, request.wallet_id)

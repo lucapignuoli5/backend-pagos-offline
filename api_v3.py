@@ -112,6 +112,7 @@ def issue_authorization_v3(
     if locked.rowcount != 1:
         db.rollback()
         raise HTTPException(409, "No se pudo reservar el presupuesto offline")
+    db.refresh(wallet)
     committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents), 0)).filter(
         models.OfflineCommitment.wallet_id == wallet.id, models.OfflineCommitment.closed.is_(False)
     ).scalar())

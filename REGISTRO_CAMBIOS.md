@@ -543,3 +543,16 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** no se afirma arranque, migración, HTTP, concurrencia, Qt, PC/SC ni hardware.
 - **Commit:** `docs(corrections): [TFG-C7-DOC-02] cerrar programacion backend pendiente`
 - **Impacto académico:** deja trazabilidad vigente sin modificar la Entrega 4 presentada.
+
+## TFG-C2-BE-07 — Limitar v2 a evidencia histórica
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Requisito:** v3 es obligatorio para pagos nuevos y v2 se conserva solo para recuperación controlada.
+- **Cambio:** la emisión v2 responde retirada explícita, el procesador v2 rechaza autorizaciones que tengan compromiso v3 y la emisión v3 refresca el saldo después de adquirir el bloqueo de escritura.
+- **Archivos:** `api_v2.py`, `api_v3.py`, `sync_v2.py` y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** el inventario y la conciliación de evidencia histórica real requieren una migración operativa sobre copias controladas antes de habilitar producción.
+- **Commit:** `fix(compat): [TFG-C2-BE-07] limitar v2 a evidencia historica`
+- **Impacto académico:** evita que un cliente nuevo degrade una autorización v3 al contrato heredado.

@@ -188,6 +188,8 @@ def _validate_evidence(db: Session, request, receipt, ack_wire: bytes | None) ->
     authorization = db.get(models.OfflineAuthorization, receipt.payload["offline_authorization_id"])
     if authorization is None or authorization.wallet_id != wallet.id or authorization.wallet_key_id != wallet_key.key_id:
         raise ValueError("authorization")
+    if db.get(models.OfflineCommitment, authorization.id) is not None:
+        raise ValueError("v3 authorization cannot be used by v2")
     issued_at = _parse_timestamp(request.payload["issued_at"])
     expires_at = _parse_timestamp(request.payload["expires_at"])
     auth_issued = _as_utc(authorization.issued_at)
