@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 import base64
 import os
 from unittest.mock import patch
@@ -84,8 +85,9 @@ class ApiV3HttpTests(unittest.TestCase):
         wire = encode_signed_envelope(payload, sign_payload(payload, private))
         encoded = base64.b64encode(wire).decode()
         with patch.dict(os.environ, {"ISSUER_KEY_PATH": "external", "ISSUER_KEY_FINGERPRINT": "d" * 64}), patch.object(api_v3.IssuerIdentity, "load_external", return_value=fake), TestClient(app) as client:
-            first = client.post("/api/v3/offline-payments/11111111-1111-4111-8111-111111111111/resolution", json={"resolution_envelope_b64": encoded})
-            second = client.post("/api/v3/offline-payments/11111111-1111-4111-8111-111111111111/resolution", json={"resolution_envelope_b64": encoded})
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                responses = list(pool.map(lambda _: client.post("/api/v3/offline-payments/11111111-1111-4111-8111-111111111111/resolution", json={"resolution_envelope_b64": encoded}), range(4)))
+            first, second = responses[0], responses[1]
         self.assertEqual(first.status_code, 200, first.text); self.assertEqual(second.status_code, 200, second.text)
         self.assertTrue(second.json()["final"])
         engine.dispose()

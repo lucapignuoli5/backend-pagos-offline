@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
@@ -161,5 +162,12 @@ def store_resolution_v3(operation_id: str, request: schemas.PaymentResolutionReq
     record = models.PaymentResolution(operation_id=operation_id, status=envelope.payload["operation_status"],
                                       resolution_envelope=envelope_bytes, revision=envelope.payload["resolution_revision"])
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.get(models.PaymentResolution, operation_id)
+        if existing is None or existing.resolution_envelope != envelope_bytes:
+            raise HTTPException(409, "Resolucion conflictiva")
+        return {"operation_id": operation_id, "status": existing.status, "final": True, "revision": existing.revision}
     return {"operation_id": operation_id, "status": record.status, "final": True, "revision": record.revision}
