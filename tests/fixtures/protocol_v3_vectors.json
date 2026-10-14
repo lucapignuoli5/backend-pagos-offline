@@ -1,0 +1,198 @@
+{
+  "format_version": 1,
+  "producer": "Python cryptography / protocol_v3",
+  "keys": {
+    "pos": {
+      "key_id": "pos-test-key-v3",
+      "public_key_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaWEWwxSbIT1DRIDq3zTXEuKNSgsk3QhfDRjfRxmrr6vnZ5OJJw8cVc9Z8YkccMYq8s5hmF2QLaqCPHwYDaP7BQ==",
+      "fingerprint": "c9c6421f5400cd3d052601e7836e413a12b8bc45c1a72d2eb5f757b01696e0e4"
+    },
+    "wallet": {
+      "key_id": "wallet-test-key-v3",
+      "public_key_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEpK+b0F1SnnNPeIA4s3uACtBijm/EI+vhCnraD8Q/TCWZSSi2TFSI8Kfusiz/f7eat1+JQI+8M/nog7TMHbZNMg==",
+      "fingerprint": "cedcec5cfaf67dbd23d48c67b94e43a23460375638c298b8886f1361287178e2"
+    },
+    "issuer": {
+      "key_id": "issuer-test-key-v3",
+      "public_key_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEo6ReBmZoRg/TiZT0kR+1zN9h249SRvAlSADK/1LSejco048sUaRvCyk4liZeESy0k/ifEPaJ0evZ3AKL4UTwXg==",
+      "fingerprint": "000c119bd574de5cb99f20cdf468878e476ca40900d641f2ba25fc9ee698c64c"
+    }
+  },
+  "messages": {
+    "authorization": {
+      "payload": {
+        "version": 3,
+        "type": "offline_authorization",
+        "authorization_id": "grant-v3-1",
+        "wallet_id": "wallet-1",
+        "wallet_key_id": "wallet-test-key-v3",
+        "wallet_key_fingerprint": "cedcec5cfaf67dbd23d48c67b94e43a23460375638c298b8886f1361287178e2",
+        "wallet_public_key_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEpK+b0F1SnnNPeIA4s3uACtBijm/EI+vhCnraD8Q/TCWZSSi2TFSI8Kfusiz/f7eat1+JQI+8M/nog7TMHbZNMg==",
+        "currency": "ARS",
+        "max_payment_cents": 100000,
+        "max_payments": 10,
+        "authorized_total_cents": 1000000,
+        "max_request_lifetime_seconds": 120,
+        "issued_at": "2026-10-14T14:59:00Z",
+        "spend_expires_at": "2026-10-15T14:59:00Z",
+        "issuer_key_id": "issuer-test-key-v3",
+        "issuer_key_fingerprint": "000c119bd574de5cb99f20cdf468878e476ca40900d641f2ba25fc9ee698c64c"
+      },
+      "payload_b64": "eyJhdXRob3JpemF0aW9uX2lkIjoiZ3JhbnQtdjMtMSIsImF1dGhvcml6ZWRfdG90YWxfY2VudHMiOjEwMDAwMDAsImN1cnJlbmN5IjoiQVJTIiwiaXNzdWVkX2F0IjoiMjAyNi0xMC0xNFQxNDo1OTowMFoiLCJpc3N1ZXJfa2V5X2ZpbmdlcnByaW50IjoiMDAwYzExOWJkNTc0ZGU1Y2I5OWYyMGNkZjQ2ODg3OGU0NzZjYTQwOTAwZDY0MWYyYmEyNWZjOWVlNjk4YzY0YyIsImlzc3Vlcl9rZXlfaWQiOiJpc3N1ZXItdGVzdC1rZXktdjMiLCJtYXhfcGF5bWVudF9jZW50cyI6MTAwMDAwLCJtYXhfcGF5bWVudHMiOjEwLCJtYXhfcmVxdWVzdF9saWZldGltZV9zZWNvbmRzIjoxMjAsInNwZW5kX2V4cGlyZXNfYXQiOiIyMDI2LTEwLTE1VDE0OjU5OjAwWiIsInR5cGUiOiJvZmZsaW5lX2F1dGhvcml6YXRpb24iLCJ2ZXJzaW9uIjozLCJ3YWxsZXRfaWQiOiJ3YWxsZXQtMSIsIndhbGxldF9rZXlfZmluZ2VycHJpbnQiOiJjZWRjZWM1Y2ZhZjY3ZGJkMjNkNDhjNjdiOTRlNDNhMjM0NjAzNzU2MzhjMjk4Yjg4ODZmMTM2MTI4NzE3OGUyIiwid2FsbGV0X2tleV9pZCI6IndhbGxldC10ZXN0LWtleS12MyIsIndhbGxldF9wdWJsaWNfa2V5X2I2NCI6Ik1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRXBLK2IwRjFTbm5OUGVJQTRzM3VBQ3RCaWptL0VJK3ZoQ25yYUQ4US9UQ1daU1NpMlRGU0k4S2Z1c2l6L2Y3ZWF0MStKUUkrOE0vbm9nN1RNSGJaTk1nPT0ifQ==",
+      "signature_b64": "MEYCIQCFhAAIM3ABYFy/H6sKC8MQwUVx6U+Uum1YKXPvTACeFgIhAOKLDtD3LRf+JgKGOwvTpKZ7UypLJG6/rroDUG7Lf3k+",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhkWFJvYjNKcGVtRjBhVzl1WDJsa0lqb2laM0poYm5RdGRqTXRNU0lzSW1GMWRHaHZjbWw2WldSZmRHOTBZV3hmWTJWdWRITWlPakV3TURBd01EQXNJbU4xY25KbGJtTjVJam9pUVZKVElpd2lhWE56ZFdWa1gyRjBJam9pTWpBeU5pMHhNQzB4TkZReE5EbzFPVG93TUZvaUxDSnBjM04xWlhKZmEyVjVYMlpwYm1kbGNuQnlhVzUwSWpvaU1EQXdZekV4T1dKa05UYzBaR1UxWTJJNU9XWXlNR05rWmpRMk9EZzNPR1UwTnpaallUUXdPVEF3WkRZME1XWXlZbUV5Tldaak9XVmxOams0WXpZMFl5SXNJbWx6YzNWbGNsOXJaWGxmYVdRaU9pSnBjM04xWlhJdGRHVnpkQzFyWlhrdGRqTWlMQ0p0WVhoZmNHRjViV1Z1ZEY5alpXNTBjeUk2TVRBd01EQXdMQ0p0WVhoZmNHRjViV1Z1ZEhNaU9qRXdMQ0p0WVhoZmNtVnhkV1Z6ZEY5c2FXWmxkR2x0WlY5elpXTnZibVJ6SWpveE1qQXNJbk53Wlc1a1gyVjRjR2x5WlhOZllYUWlPaUl5TURJMkxURXdMVEUxVkRFME9qVTVPakF3V2lJc0luUjVjR1VpT2lKdlptWnNhVzVsWDJGMWRHaHZjbWw2WVhScGIyNGlMQ0oyWlhKemFXOXVJam96TENKM1lXeHNaWFJmYVdRaU9pSjNZV3hzWlhRdE1TSXNJbmRoYkd4bGRGOXJaWGxmWm1sdVoyVnljSEpwYm5RaU9pSmpaV1JqWldNMVkyWmhaalkzWkdKa01qTmtORGhqTmpkaU9UUmxORE5oTWpNME5qQXpOelUyTXpoak1qazRZamc0T0RabU1UTTJNVEk0TnpFM09HVXlJaXdpZDJGc2JHVjBYMnRsZVY5cFpDSTZJbmRoYkd4bGRDMTBaWE4wTFd0bGVTMTJNeUlzSW5kaGJHeGxkRjl3ZFdKc2FXTmZhMlY1WDJJMk5DSTZJazFHYTNkRmQxbElTMjlhU1hwcU1FTkJVVmxKUzI5YVNYcHFNRVJCVVdORVVXZEJSWEJMSzJJd1JqRlRibTVPVUdWSlFUUnpNM1ZCUTNSQ2FXcHRMMFZKSzNab1EyNXlZVVE0VVM5VVExZGFVMU5wTWxSR1UwazRTMloxYzJsNkwyWTNaV0YwTVN0S1VVa3JPRTB2Ym05bk4xUk5TR0phVGsxblBUMGlmUT09Iiwic2lnbmF0dXJlX2I2NCI6Ik1FWUNJUUNGaEFBSU0zQUJZRnkvSDZzS0M4TVF3VVZ4NlUrVXVtMVlLWFB2VEFDZUZnSWhBT0tMRHREM0xSZitKZ0tHT3d2VHBLWjdVeXBMSkc2L3Jyb0RVRzdMZjNrKyJ9",
+      "payload_sha256": "bb6b1aaff0710cd36e9f15fae184f9c90b80f1d3d8c46b96cc38bb060ac01465",
+      "signer": "issuer"
+    },
+    "request": {
+      "payload": {
+        "version": 3,
+        "operation_id": "123e4567-e89b-42d3-a456-426614174001",
+        "merchant_id": "merchant-2",
+        "terminal_id": "terminal-1",
+        "amount_cents": 100000,
+        "currency": "ARS",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "issued_at": "2026-10-14T15:00:00Z",
+        "expires_at": "2026-10-14T15:02:00Z",
+        "type": "payment_request",
+        "pos_key_id": "pos-test-key-v3",
+        "pos_key_fingerprint": "c9c6421f5400cd3d052601e7836e413a12b8bc45c1a72d2eb5f757b01696e0e4"
+      },
+      "payload_b64": "eyJhbW91bnRfY2VudHMiOjEwMDAwMCwiY3VycmVuY3kiOiJBUlMiLCJleHBpcmVzX2F0IjoiMjAyNi0xMC0xNFQxNTowMjowMFoiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTE0VDE1OjAwOjAwWiIsIm1lcmNoYW50X2lkIjoibWVyY2hhbnQtMiIsIm5vbmNlIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EdyIsIm9wZXJhdGlvbl9pZCI6IjEyM2U0NTY3LWU4OWItNDJkMy1hNDU2LTQyNjYxNDE3NDAwMSIsInBvc19rZXlfZmluZ2VycHJpbnQiOiJjOWM2NDIxZjU0MDBjZDNkMDUyNjAxZTc4MzZlNDEzYTEyYjhiYzQ1YzFhNzJkMmViNWY3NTdiMDE2OTZlMGU0IiwicG9zX2tleV9pZCI6InBvcy10ZXN0LWtleS12MyIsInRlcm1pbmFsX2lkIjoidGVybWluYWwtMSIsInR5cGUiOiJwYXltZW50X3JlcXVlc3QiLCJ2ZXJzaW9uIjozfQ==",
+      "signature_b64": "MEUCIEb4KKtoMnCpJGrTMwxsZ80VmT7DmVtX29UQz/mKbOoXAiEA3FJI7f3F4QvxEYWmSWr/7/3nnvHx1Hr6BIldoS8xUO4=",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhiVzkxYm5SZlkyVnVkSE1pT2pFd01EQXdNQ3dpWTNWeWNtVnVZM2tpT2lKQlVsTWlMQ0psZUhCcGNtVnpYMkYwSWpvaU1qQXlOaTB4TUMweE5GUXhOVG93TWpvd01Gb2lMQ0pwYzNOMVpXUmZZWFFpT2lJeU1ESTJMVEV3TFRFMFZERTFPakF3T2pBd1dpSXNJbTFsY21Ob1lXNTBYMmxrSWpvaWJXVnlZMmhoYm5RdE1pSXNJbTV2Ym1ObElqb2lRVUZGUTBGM1VVWkNaMk5KUTFGdlRFUkJNRTlFZHlJc0ltOXdaWEpoZEdsdmJsOXBaQ0k2SWpFeU0yVTBOVFkzTFdVNE9XSXROREprTXkxaE5EVTJMVFF5TmpZeE5ERTNOREF3TVNJc0luQnZjMTlyWlhsZlptbHVaMlZ5Y0hKcGJuUWlPaUpqT1dNMk5ESXhaalUwTURCalpETmtNRFV5TmpBeFpUYzRNelpsTkRFellURXlZamhpWXpRMVl6RmhOekprTW1WaU5XWTNOVGRpTURFMk9UWmxNR1UwSWl3aWNHOXpYMnRsZVY5cFpDSTZJbkJ2Y3kxMFpYTjBMV3RsZVMxMk15SXNJblJsY20xcGJtRnNYMmxrSWpvaWRHVnliV2x1WVd3dE1TSXNJblI1Y0dVaU9pSndZWGx0Wlc1MFgzSmxjWFZsYzNRaUxDSjJaWEp6YVc5dUlqb3pmUT09Iiwic2lnbmF0dXJlX2I2NCI6Ik1FVUNJRWI0S0t0b01uQ3BKR3JUTXd4c1o4MFZtVDdEbVZ0WDI5VVF6L21LYk9vWEFpRUEzRkpJN2YzRjRRdnhFWVdtU1dyLzcvM25udkh4MUhyNkJJbGRvUzh4VU80PSJ9",
+      "payload_sha256": "ba4d83d23b1b5d35974417ec22a1d14fe8bde96872245843ef90d5ee7347ef74",
+      "signer": "pos"
+    },
+    "receipt": {
+      "payload": {
+        "version": 3,
+        "operation_id": "123e4567-e89b-42d3-a456-426614174001",
+        "merchant_id": "merchant-2",
+        "terminal_id": "terminal-1",
+        "amount_cents": 100000,
+        "currency": "ARS",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "issued_at": "2026-10-14T15:00:00Z",
+        "expires_at": "2026-10-14T15:02:00Z",
+        "type": "payment_receipt",
+        "wallet_id": "wallet-1",
+        "offline_authorization_id": "grant-v3-1",
+        "wallet_key_id": "wallet-test-key-v3",
+        "wallet_key_fingerprint": "cedcec5cfaf67dbd23d48c67b94e43a23460375638c298b8886f1361287178e2",
+        "request_digest": "ba4d83d23b1b5d35974417ec22a1d14fe8bde96872245843ef90d5ee7347ef74",
+        "authorization_digest": "bb6b1aaff0710cd36e9f15fae184f9c90b80f1d3d8c46b96cc38bb060ac01465",
+        "issuance_index": 1,
+        "confirmed_at": "2026-10-14T15:00:20Z"
+      },
+      "payload_b64": "eyJhbW91bnRfY2VudHMiOjEwMDAwMCwiYXV0aG9yaXphdGlvbl9kaWdlc3QiOiJiYjZiMWFhZmYwNzEwY2QzNmU5ZjE1ZmFlMTg0ZjljOTBiODBmMWQzZDhjNDZiOTZjYzM4YmIwNjBhYzAxNDY1IiwiY29uZmlybWVkX2F0IjoiMjAyNi0xMC0xNFQxNTowMDoyMFoiLCJjdXJyZW5jeSI6IkFSUyIsImV4cGlyZXNfYXQiOiIyMDI2LTEwLTE0VDE1OjAyOjAwWiIsImlzc3VhbmNlX2luZGV4IjoxLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTE0VDE1OjAwOjAwWiIsIm1lcmNoYW50X2lkIjoibWVyY2hhbnQtMiIsIm5vbmNlIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EdyIsIm9mZmxpbmVfYXV0aG9yaXphdGlvbl9pZCI6ImdyYW50LXYzLTEiLCJvcGVyYXRpb25faWQiOiIxMjNlNDU2Ny1lODliLTQyZDMtYTQ1Ni00MjY2MTQxNzQwMDEiLCJyZXF1ZXN0X2RpZ2VzdCI6ImJhNGQ4M2QyM2IxYjVkMzU5NzQ0MTdlYzIyYTFkMTRmZThiZGU5Njg3MjI0NTg0M2VmOTBkNWVlNzM0N2VmNzQiLCJ0ZXJtaW5hbF9pZCI6InRlcm1pbmFsLTEiLCJ0eXBlIjoicGF5bWVudF9yZWNlaXB0IiwidmVyc2lvbiI6Mywid2FsbGV0X2lkIjoid2FsbGV0LTEiLCJ3YWxsZXRfa2V5X2ZpbmdlcnByaW50IjoiY2VkY2VjNWNmYWY2N2RiZDIzZDQ4YzY3Yjk0ZTQzYTIzNDYwMzc1NjM4YzI5OGI4ODg2ZjEzNjEyODcxNzhlMiIsIndhbGxldF9rZXlfaWQiOiJ3YWxsZXQtdGVzdC1rZXktdjMifQ==",
+      "signature_b64": "MEQCIDXL0+SWrQYwWZFhnMDsPrJNaZ4FgLSYFQjWUzBi87+wAiBpPZl8zDGA9ilQncMnFnkfDTzk+YSAW0hobRQM3L6SCQ==",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhiVzkxYm5SZlkyVnVkSE1pT2pFd01EQXdNQ3dpWVhWMGFHOXlhWHBoZEdsdmJsOWthV2RsYzNRaU9pSmlZalppTVdGaFptWXdOekV3WTJRek5tVTVaakUxWm1GbE1UZzBaamxqT1RCaU9EQm1NV1F6WkRoak5EWmlPVFpqWXpNNFltSXdOakJoWXpBeE5EWTFJaXdpWTI5dVptbHliV1ZrWDJGMElqb2lNakF5TmkweE1DMHhORlF4TlRvd01Eb3lNRm9pTENKamRYSnlaVzVqZVNJNklrRlNVeUlzSW1WNGNHbHlaWE5mWVhRaU9pSXlNREkyTFRFd0xURTBWREUxT2pBeU9qQXdXaUlzSW1semMzVmhibU5sWDJsdVpHVjRJam94TENKcGMzTjFaV1JmWVhRaU9pSXlNREkyTFRFd0xURTBWREUxT2pBd09qQXdXaUlzSW0xbGNtTm9ZVzUwWDJsa0lqb2liV1Z5WTJoaGJuUXRNaUlzSW01dmJtTmxJam9pUVVGRlEwRjNVVVpDWjJOSlExRnZURVJCTUU5RWR5SXNJbTltWm14cGJtVmZZWFYwYUc5eWFYcGhkR2x2Ymw5cFpDSTZJbWR5WVc1MExYWXpMVEVpTENKdmNHVnlZWFJwYjI1ZmFXUWlPaUl4TWpObE5EVTJOeTFsT0RsaUxUUXlaRE10WVRRMU5pMDBNalkyTVRReE56UXdNREVpTENKeVpYRjFaWE4wWDJScFoyVnpkQ0k2SW1KaE5HUTRNMlF5TTJJeFlqVmtNelU1TnpRME1UZGxZekl5WVRGa01UUm1aVGhpWkdVNU5qZzNNakkwTlRnME0yVm1PVEJrTldWbE56TTBOMlZtTnpRaUxDSjBaWEp0YVc1aGJGOXBaQ0k2SW5SbGNtMXBibUZzTFRFaUxDSjBlWEJsSWpvaWNHRjViV1Z1ZEY5eVpXTmxhWEIwSWl3aWRtVnljMmx2YmlJNk15d2lkMkZzYkdWMFgybGtJam9pZDJGc2JHVjBMVEVpTENKM1lXeHNaWFJmYTJWNVgyWnBibWRsY25CeWFXNTBJam9pWTJWa1kyVmpOV05tWVdZMk4yUmlaREl6WkRRNFl6WTNZamswWlRRellUSXpORFl3TXpjMU5qTTRZekk1T0dJNE9EZzJaakV6TmpFeU9EY3hOemhsTWlJc0luZGhiR3hsZEY5clpYbGZhV1FpT2lKM1lXeHNaWFF0ZEdWemRDMXJaWGt0ZGpNaWZRPT0iLCJzaWduYXR1cmVfYjY0IjoiTUVRQ0lEWEwwK1NXclFZd1daRmhuTURzUHJKTmFaNEZnTFNZRlFqV1V6Qmk4Nyt3QWlCcFBabDh6REdBOWlsUW5jTW5GbmtmRFR6aytZU0FXMGhvYlJRTTNMNlNDUT09In0=",
+      "payload_sha256": "5f373b810a249724455c3a5963b9c2990b44046cfd0979bff68f284e22fcd72b",
+      "signer": "wallet"
+    },
+    "ack": {
+      "payload": {
+        "version": 3,
+        "operation_id": "123e4567-e89b-42d3-a456-426614174001",
+        "merchant_id": "merchant-2",
+        "terminal_id": "terminal-1",
+        "amount_cents": 100000,
+        "currency": "ARS",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "issued_at": "2026-10-14T15:00:00Z",
+        "expires_at": "2026-10-14T15:02:00Z",
+        "type": "payment_ack",
+        "wallet_id": "wallet-1",
+        "offline_authorization_id": "grant-v3-1",
+        "pos_key_id": "pos-test-key-v3",
+        "pos_key_fingerprint": "c9c6421f5400cd3d052601e7836e413a12b8bc45c1a72d2eb5f757b01696e0e4",
+        "receipt_digest": "5f373b810a249724455c3a5963b9c2990b44046cfd0979bff68f284e22fcd72b",
+        "accepted_at": "2026-10-14T15:00:30Z",
+        "status": "LOCALLY_ACCEPTED"
+      },
+      "payload_b64": "eyJhY2NlcHRlZF9hdCI6IjIwMjYtMTAtMTRUMTU6MDA6MzBaIiwiYW1vdW50X2NlbnRzIjoxMDAwMDAsImN1cnJlbmN5IjoiQVJTIiwiZXhwaXJlc19hdCI6IjIwMjYtMTAtMTRUMTU6MDI6MDBaIiwiaXNzdWVkX2F0IjoiMjAyNi0xMC0xNFQxNTowMDowMFoiLCJtZXJjaGFudF9pZCI6Im1lcmNoYW50LTIiLCJub25jZSI6IkFBRUNBd1FGQmdjSUNRb0xEQTBPRHciLCJvZmZsaW5lX2F1dGhvcml6YXRpb25faWQiOiJncmFudC12My0xIiwib3BlcmF0aW9uX2lkIjoiMTIzZTQ1NjctZTg5Yi00MmQzLWE0NTYtNDI2NjE0MTc0MDAxIiwicG9zX2tleV9maW5nZXJwcmludCI6ImM5YzY0MjFmNTQwMGNkM2QwNTI2MDFlNzgzNmU0MTNhMTJiOGJjNDVjMWE3MmQyZWI1Zjc1N2IwMTY5NmUwZTQiLCJwb3Nfa2V5X2lkIjoicG9zLXRlc3Qta2V5LXYzIiwicmVjZWlwdF9kaWdlc3QiOiI1ZjM3M2I4MTBhMjQ5NzI0NDU1YzNhNTk2M2I5YzI5OTBiNDQwNDZjZmQwOTc5YmZmNjhmMjg0ZTIyZmNkNzJiIiwic3RhdHVzIjoiTE9DQUxMWV9BQ0NFUFRFRCIsInRlcm1pbmFsX2lkIjoidGVybWluYWwtMSIsInR5cGUiOiJwYXltZW50X2FjayIsInZlcnNpb24iOjMsIndhbGxldF9pZCI6IndhbGxldC0xIn0=",
+      "signature_b64": "MEUCIQCVLS9G8/zwZp3fo3lnG1bzXWFgf7hvuU8w/buOr6ZjVAIgOSQbQei7r9vQgpaqpB1AlKhNeGVKMPp8cf8z0kNe8GQ=",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhZMk5sY0hSbFpGOWhkQ0k2SWpJd01qWXRNVEF0TVRSVU1UVTZNREE2TXpCYUlpd2lZVzF2ZFc1MFgyTmxiblJ6SWpveE1EQXdNREFzSW1OMWNuSmxibU41SWpvaVFWSlRJaXdpWlhod2FYSmxjMTloZENJNklqSXdNall0TVRBdE1UUlVNVFU2TURJNk1EQmFJaXdpYVhOemRXVmtYMkYwSWpvaU1qQXlOaTB4TUMweE5GUXhOVG93TURvd01Gb2lMQ0p0WlhKamFHRnVkRjlwWkNJNkltMWxjbU5vWVc1MExUSWlMQ0p1YjI1alpTSTZJa0ZCUlVOQmQxRkdRbWRqU1VOUmIweEVRVEJQUkhjaUxDSnZabVpzYVc1bFgyRjFkR2h2Y21sNllYUnBiMjVmYVdRaU9pSm5jbUZ1ZEMxMk15MHhJaXdpYjNCbGNtRjBhVzl1WDJsa0lqb2lNVEl6WlRRMU5qY3RaVGc1WWkwME1tUXpMV0UwTlRZdE5ESTJOakUwTVRjME1EQXhJaXdpY0c5elgydGxlVjltYVc1blpYSndjbWx1ZENJNkltTTVZelkwTWpGbU5UUXdNR05rTTJRd05USTJNREZsTnpnek5tVTBNVE5oTVRKaU9HSmpORFZqTVdFM01tUXlaV0kxWmpjMU4ySXdNVFk1Tm1Vd1pUUWlMQ0p3YjNOZmEyVjVYMmxrSWpvaWNHOXpMWFJsYzNRdGEyVjVMWFl6SWl3aWNtVmpaV2x3ZEY5a2FXZGxjM1FpT2lJMVpqTTNNMkk0TVRCaE1qUTVOekkwTkRVMVl6TmhOVGsyTTJJNVl6STVPVEJpTkRRd05EWmpabVF3T1RjNVltWm1OamhtTWpnMFpUSXlabU5rTnpKaUlpd2ljM1JoZEhWeklqb2lURTlEUVV4TVdWOUJRME5GVUZSRlJDSXNJblJsY20xcGJtRnNYMmxrSWpvaWRHVnliV2x1WVd3dE1TSXNJblI1Y0dVaU9pSndZWGx0Wlc1MFgyRmpheUlzSW5abGNuTnBiMjRpT2pNc0luZGhiR3hsZEY5cFpDSTZJbmRoYkd4bGRDMHhJbjA9Iiwic2lnbmF0dXJlX2I2NCI6Ik1FVUNJUUNWTFM5RzgvendacDNmbzNsbkcxYnpYV0ZnZjdodnVVOHcvYnVPcjZaalZBSWdPU1FiUWVpN3I5dlFncGFxcEIxQWxLaE5lR1ZLTVBwOGNmOHowa05lOEdRPSJ9",
+      "payload_sha256": "22ffea67f94758b83f94bb3024a050b8cb58c00896162fd0cab0e8ad1c303e62",
+      "signer": "pos"
+    },
+    "close": {
+      "payload": {
+        "version": 3,
+        "type": "offline_authorization_close",
+        "closure_id": "123e4567-e89b-42d3-a456-426614174002",
+        "authorization_id": "grant-v3-1",
+        "wallet_id": "wallet-1",
+        "wallet_key_id": "wallet-test-key-v3",
+        "wallet_key_fingerprint": "cedcec5cfaf67dbd23d48c67b94e43a23460375638c298b8886f1361287178e2",
+        "authorization_digest": "bb6b1aaff0710cd36e9f15fae184f9c90b80f1d3d8c46b96cc38bb060ac01465",
+        "final_issuance_index": 1,
+        "emitted_total_cents": 100000,
+        "manifest_digest": "f26eecd0ec3f096f6ccf26a06e34d2e6be9c1892ac145b26b489ae741138cdea",
+        "issued_at": "2026-10-14T15:01:00Z"
+      },
+      "payload_b64": "eyJhdXRob3JpemF0aW9uX2RpZ2VzdCI6ImJiNmIxYWFmZjA3MTBjZDM2ZTlmMTVmYWUxODRmOWM5MGI4MGYxZDNkOGM0NmI5NmNjMzhiYjA2MGFjMDE0NjUiLCJhdXRob3JpemF0aW9uX2lkIjoiZ3JhbnQtdjMtMSIsImNsb3N1cmVfaWQiOiIxMjNlNDU2Ny1lODliLTQyZDMtYTQ1Ni00MjY2MTQxNzQwMDIiLCJlbWl0dGVkX3RvdGFsX2NlbnRzIjoxMDAwMDAsImZpbmFsX2lzc3VhbmNlX2luZGV4IjoxLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTE0VDE1OjAxOjAwWiIsIm1hbmlmZXN0X2RpZ2VzdCI6ImYyNmVlY2QwZWMzZjA5NmY2Y2NmMjZhMDZlMzRkMmU2YmU5YzE4OTJhYzE0NWIyNmI0ODlhZTc0MTEzOGNkZWEiLCJ0eXBlIjoib2ZmbGluZV9hdXRob3JpemF0aW9uX2Nsb3NlIiwidmVyc2lvbiI6Mywid2FsbGV0X2lkIjoid2FsbGV0LTEiLCJ3YWxsZXRfa2V5X2ZpbmdlcnByaW50IjoiY2VkY2VjNWNmYWY2N2RiZDIzZDQ4YzY3Yjk0ZTQzYTIzNDYwMzc1NjM4YzI5OGI4ODg2ZjEzNjEyODcxNzhlMiIsIndhbGxldF9rZXlfaWQiOiJ3YWxsZXQtdGVzdC1rZXktdjMifQ==",
+      "signature_b64": "MEYCIQD8ex2Vh4EOMtDjotRmkb3628iV2vVrPWI4ls4lilxwAgIhAImCb0tSnTp6i6AiyglvF2xNrySxb+rIKzFmTqT22kiv",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhkWFJvYjNKcGVtRjBhVzl1WDJScFoyVnpkQ0k2SW1KaU5tSXhZV0ZtWmpBM01UQmpaRE0yWlRsbU1UVm1ZV1V4T0RSbU9XTTVNR0k0TUdZeFpETmtPR00wTm1JNU5tTmpNemhpWWpBMk1HRmpNREUwTmpVaUxDSmhkWFJvYjNKcGVtRjBhVzl1WDJsa0lqb2laM0poYm5RdGRqTXRNU0lzSW1Oc2IzTjFjbVZmYVdRaU9pSXhNak5sTkRVMk55MWxPRGxpTFRReVpETXRZVFExTmkwME1qWTJNVFF4TnpRd01ESWlMQ0psYldsMGRHVmtYM1J2ZEdGc1gyTmxiblJ6SWpveE1EQXdNREFzSW1acGJtRnNYMmx6YzNWaGJtTmxYMmx1WkdWNElqb3hMQ0pwYzNOMVpXUmZZWFFpT2lJeU1ESTJMVEV3TFRFMFZERTFPakF4T2pBd1dpSXNJbTFoYm1sbVpYTjBYMlJwWjJWemRDSTZJbVl5Tm1WbFkyUXdaV016WmpBNU5tWTJZMk5tTWpaaE1EWmxNelJrTW1VMlltVTVZekU0T1RKaFl6RTBOV0l5Tm1JME9EbGhaVGMwTVRFek9HTmtaV0VpTENKMGVYQmxJam9pYjJabWJHbHVaVjloZFhSb2IzSnBlbUYwYVc5dVgyTnNiM05sSWl3aWRtVnljMmx2YmlJNk15d2lkMkZzYkdWMFgybGtJam9pZDJGc2JHVjBMVEVpTENKM1lXeHNaWFJmYTJWNVgyWnBibWRsY25CeWFXNTBJam9pWTJWa1kyVmpOV05tWVdZMk4yUmlaREl6WkRRNFl6WTNZamswWlRRellUSXpORFl3TXpjMU5qTTRZekk1T0dJNE9EZzJaakV6TmpFeU9EY3hOemhsTWlJc0luZGhiR3hsZEY5clpYbGZhV1FpT2lKM1lXeHNaWFF0ZEdWemRDMXJaWGt0ZGpNaWZRPT0iLCJzaWduYXR1cmVfYjY0IjoiTUVZQ0lRRDhleDJWaDRFT010RGpvdFJta2IzNjI4aVYydlZyUFdJNGxzNGxpbHh3QWdJaEFJbUNiMHRTblRwNmk2QWl5Z2x2RjJ4TnJ5U3hiK3JJS3pGbVRxVDIya2l2In0=",
+      "payload_sha256": "44a28e084d614ff00f0cec8fc80ace32bd5efc7493ec59a4d32651b7c4cccb33",
+      "signer": "wallet"
+    },
+    "resolution": {
+      "payload": {
+        "version": 3,
+        "type": "payment_resolution",
+        "operation_id": "123e4567-e89b-42d3-a456-426614174001",
+        "wallet_id": "wallet-1",
+        "merchant_id": "merchant-2",
+        "terminal_id": "terminal-1",
+        "amount_cents": 100000,
+        "currency": "ARS",
+        "offline_authorization_id": "grant-v3-1",
+        "authorization_digest": "bb6b1aaff0710cd36e9f15fae184f9c90b80f1d3d8c46b96cc38bb060ac01465",
+        "request_digest": "ba4d83d23b1b5d35974417ec22a1d14fe8bde96872245843ef90d5ee7347ef74",
+        "receipt_digest": "5f373b810a249724455c3a5963b9c2990b44046cfd0979bff68f284e22fcd72b",
+        "operation_status": "ACCEPTED",
+        "code": "APPLIED",
+        "resolution_revision": 1,
+        "resolved_at": "2026-10-16T15:00:00Z",
+        "issuer_key_id": "issuer-test-key-v3",
+        "issuer_key_fingerprint": "000c119bd574de5cb99f20cdf468878e476ca40900d641f2ba25fc9ee698c64c"
+      },
+      "payload_b64": "eyJhbW91bnRfY2VudHMiOjEwMDAwMCwiYXV0aG9yaXphdGlvbl9kaWdlc3QiOiJiYjZiMWFhZmYwNzEwY2QzNmU5ZjE1ZmFlMTg0ZjljOTBiODBmMWQzZDhjNDZiOTZjYzM4YmIwNjBhYzAxNDY1IiwiY29kZSI6IkFQUExJRUQiLCJjdXJyZW5jeSI6IkFSUyIsImlzc3Vlcl9rZXlfZmluZ2VycHJpbnQiOiIwMDBjMTE5YmQ1NzRkZTVjYjk5ZjIwY2RmNDY4ODc4ZTQ3NmNhNDA5MDBkNjQxZjJiYTI1ZmM5ZWU2OThjNjRjIiwiaXNzdWVyX2tleV9pZCI6Imlzc3Vlci10ZXN0LWtleS12MyIsIm1lcmNoYW50X2lkIjoibWVyY2hhbnQtMiIsIm9mZmxpbmVfYXV0aG9yaXphdGlvbl9pZCI6ImdyYW50LXYzLTEiLCJvcGVyYXRpb25faWQiOiIxMjNlNDU2Ny1lODliLTQyZDMtYTQ1Ni00MjY2MTQxNzQwMDEiLCJvcGVyYXRpb25fc3RhdHVzIjoiQUNDRVBURUQiLCJyZWNlaXB0X2RpZ2VzdCI6IjVmMzczYjgxMGEyNDk3MjQ0NTVjM2E1OTYzYjljMjk5MGI0NDA0NmNmZDA5NzliZmY2OGYyODRlMjJmY2Q3MmIiLCJyZXF1ZXN0X2RpZ2VzdCI6ImJhNGQ4M2QyM2IxYjVkMzU5NzQ0MTdlYzIyYTFkMTRmZThiZGU5Njg3MjI0NTg0M2VmOTBkNWVlNzM0N2VmNzQiLCJyZXNvbHV0aW9uX3JldmlzaW9uIjoxLCJyZXNvbHZlZF9hdCI6IjIwMjYtMTAtMTZUMTU6MDA6MDBaIiwidGVybWluYWxfaWQiOiJ0ZXJtaW5hbC0xIiwidHlwZSI6InBheW1lbnRfcmVzb2x1dGlvbiIsInZlcnNpb24iOjMsIndhbGxldF9pZCI6IndhbGxldC0xIn0=",
+      "signature_b64": "MEYCIQCR8QkOfG+WKwB1XJkxR3gT81Qkk6c+Yzq5Fr9uKXJxOwIhAOW2hVTDKZjLrypt51QhfKTkr7mZ1fgtiru3JGnosguS",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5SmhiVzkxYm5SZlkyVnVkSE1pT2pFd01EQXdNQ3dpWVhWMGFHOXlhWHBoZEdsdmJsOWthV2RsYzNRaU9pSmlZalppTVdGaFptWXdOekV3WTJRek5tVTVaakUxWm1GbE1UZzBaamxqT1RCaU9EQm1NV1F6WkRoak5EWmlPVFpqWXpNNFltSXdOakJoWXpBeE5EWTFJaXdpWTI5a1pTSTZJa0ZRVUV4SlJVUWlMQ0pqZFhKeVpXNWplU0k2SWtGU1V5SXNJbWx6YzNWbGNsOXJaWGxmWm1sdVoyVnljSEpwYm5RaU9pSXdNREJqTVRFNVltUTFOelJrWlRWallqazVaakl3WTJSbU5EWTRPRGM0WlRRM05tTmhOREE1TURCa05qUXhaakppWVRJMVptTTVaV1UyT1Roak5qUmpJaXdpYVhOemRXVnlYMnRsZVY5cFpDSTZJbWx6YzNWbGNpMTBaWE4wTFd0bGVTMTJNeUlzSW0xbGNtTm9ZVzUwWDJsa0lqb2liV1Z5WTJoaGJuUXRNaUlzSW05bVpteHBibVZmWVhWMGFHOXlhWHBoZEdsdmJsOXBaQ0k2SW1keVlXNTBMWFl6TFRFaUxDSnZjR1Z5WVhScGIyNWZhV1FpT2lJeE1qTmxORFUyTnkxbE9EbGlMVFF5WkRNdFlUUTFOaTAwTWpZMk1UUXhOelF3TURFaUxDSnZjR1Z5WVhScGIyNWZjM1JoZEhWeklqb2lRVU5EUlZCVVJVUWlMQ0p5WldObGFYQjBYMlJwWjJWemRDSTZJalZtTXpjellqZ3hNR0V5TkRrM01qUTBOVFZqTTJFMU9UWXpZamxqTWprNU1HSTBOREEwTm1ObVpEQTVOemxpWm1ZMk9HWXlPRFJsTWpKbVkyUTNNbUlpTENKeVpYRjFaWE4wWDJScFoyVnpkQ0k2SW1KaE5HUTRNMlF5TTJJeFlqVmtNelU1TnpRME1UZGxZekl5WVRGa01UUm1aVGhpWkdVNU5qZzNNakkwTlRnME0yVm1PVEJrTldWbE56TTBOMlZtTnpRaUxDSnlaWE52YkhWMGFXOXVYM0psZG1semFXOXVJam94TENKeVpYTnZiSFpsWkY5aGRDSTZJakl3TWpZdE1UQXRNVFpVTVRVNk1EQTZNREJhSWl3aWRHVnliV2x1WVd4ZmFXUWlPaUowWlhKdGFXNWhiQzB4SWl3aWRIbHdaU0k2SW5CaGVXMWxiblJmY21WemIyeDFkR2x2YmlJc0luWmxjbk5wYjI0aU9qTXNJbmRoYkd4bGRGOXBaQ0k2SW5kaGJHeGxkQzB4SW4wPSIsInNpZ25hdHVyZV9iNjQiOiJNRVlDSVFDUjhRa09mRytXS3dCMVhKa3hSM2dUODFRa2s2YytZenE1RnI5dUtYSnhPd0loQU9XMmhWVERLWmpMcnlwdDUxUWhmS1RrcjdtWjFmZ3RpcnUzSkdub3NndVMifQ==",
+      "payload_sha256": "d583e2dac88cf38ec4425de82dc52a21140ebc2383e18ca0937018ab074632a5",
+      "signer": "issuer"
+    },
+    "key_registration": {
+      "payload": {
+        "version": 3,
+        "type": "key_registration",
+        "key_id": "wallet-test-key-v3",
+        "purpose": "wallet",
+        "owner_user_id": 1,
+        "scope_id": "wallet-1",
+        "fingerprint": "cedcec5cfaf67dbd23d48c67b94e43a23460375638c298b8886f1361287178e2",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "issued_at": "2026-10-14T14:58:00Z"
+      },
+      "payload_b64": "eyJmaW5nZXJwcmludCI6ImNlZGNlYzVjZmFmNjdkYmQyM2Q0OGM2N2I5NGU0M2EyMzQ2MDM3NTYzOGMyOThiODg4NmYxMzYxMjg3MTc4ZTIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTE0VDE0OjU4OjAwWiIsImtleV9pZCI6IndhbGxldC10ZXN0LWtleS12MyIsIm5vbmNlIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EdyIsIm93bmVyX3VzZXJfaWQiOjEsInB1cnBvc2UiOiJ3YWxsZXQiLCJzY29wZV9pZCI6IndhbGxldC0xIiwidHlwZSI6ImtleV9yZWdpc3RyYXRpb24iLCJ2ZXJzaW9uIjozfQ==",
+      "signature_b64": "MEUCIQCSIte9P6eHdNzkesmvNmp+prwGqgZ/DluLwaxUbu9LMAIgIsQog1lKOpDH/xl0F+zGaq9ABIltFaoh3MpvHqbhrRA=",
+      "envelope_b64": "eyJwYXlsb2FkX2I2NCI6ImV5Sm1hVzVuWlhKd2NtbHVkQ0k2SW1ObFpHTmxZelZqWm1GbU5qZGtZbVF5TTJRME9HTTJOMkk1TkdVME0yRXlNelEyTURNM05UWXpPR015T1RoaU9EZzRObVl4TXpZeE1qZzNNVGM0WlRJaUxDSnBjM04xWldSZllYUWlPaUl5TURJMkxURXdMVEUwVkRFME9qVTRPakF3V2lJc0ltdGxlVjlwWkNJNkluZGhiR3hsZEMxMFpYTjBMV3RsZVMxMk15SXNJbTV2Ym1ObElqb2lRVUZGUTBGM1VVWkNaMk5KUTFGdlRFUkJNRTlFZHlJc0ltOTNibVZ5WDNWelpYSmZhV1FpT2pFc0luQjFjbkJ2YzJVaU9pSjNZV3hzWlhRaUxDSnpZMjl3WlY5cFpDSTZJbmRoYkd4bGRDMHhJaXdpZEhsd1pTSTZJbXRsZVY5eVpXZHBjM1J5WVhScGIyNGlMQ0oyWlhKemFXOXVJam96ZlE9PSIsInNpZ25hdHVyZV9iNjQiOiJNRVVDSVFDU0l0ZTlQNmVIZE56a2VzbXZObXArcHJ3R3FnWi9EbHVMd2F4VWJ1OUxNQUlnSXNRb2cxbEtPcERIL3hsMEYrekdhcTlBQklsdEZhb2gzTXB2SHFiaHJSQT0ifQ==",
+      "payload_sha256": "a8960c71906af3d9483dcee3755499245c775cb9879f224c1307cf5b72de4fec",
+      "signer": "wallet"
+    }
+  },
+  "manifest": [
+    {
+      "issuance_index": 1,
+      "operation_id": "123e4567-e89b-42d3-a456-426614174001",
+      "amount_cents": 100000,
+      "receipt_digest": "5f373b810a249724455c3a5963b9c2990b44046cfd0979bff68f284e22fcd72b"
+    }
+  ],
+  "manifest_b64": "W3siYW1vdW50X2NlbnRzIjoxMDAwMDAsImlzc3VhbmNlX2luZGV4IjoxLCJvcGVyYXRpb25faWQiOiIxMjNlNDU2Ny1lODliLTQyZDMtYTQ1Ni00MjY2MTQxNzQwMDEiLCJyZWNlaXB0X2RpZ2VzdCI6IjVmMzczYjgxMGEyNDk3MjQ0NTVjM2E1OTYzYjljMjk5MGI0NDA0NmNmZDA5NzliZmY2OGYyODRlMjJmY2Q3MmIifV0=",
+  "manifest_sha256": "f26eecd0ec3f096f6ccf26a06e34d2e6be9c1892ac145b26b489ae741138cdea"
+}

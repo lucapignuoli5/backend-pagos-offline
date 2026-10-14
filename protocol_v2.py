@@ -178,7 +178,11 @@ def parse_signed_envelope(data: bytes) -> SignedEnvelope:
         raise ProtocolError("Sobre firmado invalido") from exc
     if not isinstance(envelope, dict) or set(envelope) != {"payload_b64", "signature_b64"}:
         raise ProtocolError("Campos de sobre firmado incompatibles")
-    if canonical_json(envelope) != text:
+    canonical_outer = canonical_json(envelope)
+    # Historical Gson escaped '=' in Base64. Accept only the two known wire
+    # forms, keeping every original byte for inventory/idempotency comparison.
+    kotlin_outer = canonical_outer.replace("=", "\\u003d")
+    if text not in {canonical_outer, kotlin_outer}:
         raise ProtocolError("El sobre firmado no es canonico")
     payload_bytes = _decode_base64(envelope["payload_b64"], "payload_b64")
     _decode_base64(envelope["signature_b64"], "signature_b64")
@@ -215,7 +219,7 @@ def validate_payload(payload: Mapping[str, Any]) -> MessageType:
         extra = sorted(actual - expected)
         raise ProtocolError(f"Campos incompatibles; faltan={missing}, sobran={extra}")
 
-    if payload["version"] != PROTOCOL_VERSION or isinstance(payload["version"], bool):
+    if type(payload["version"]) is not int or payload["version"] != PROTOCOL_VERSION:
         raise ProtocolError("Version de protocolo no soportada")
     _canonical_uuid(payload["operation_id"])
     for field in ("merchant_id", "terminal_id"):

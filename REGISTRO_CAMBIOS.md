@@ -360,3 +360,20 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Impacto académico:** separar auditoría, implementación y evidencia; no actualizar Entrega 4.
 
 - **Incidencia de entorno:** el primer intento CPython 3.13 falló al evaluar una anotación legacy `ec`; se añadió evaluación diferida. No se corrigen aún esas funciones heredadas ni R19. El entorno anterior se conserva y el nuevo está fuera del repositorio.
+
+
+## TFG-C1-BE-01 — Contrato firmado v3 interoperable
+
+- **Fecha:** 2026-10-14
+- **Fase:** C1
+- **Estado:** COMPROBADO
+- **Hallazgos:** R01, R02, R09, R16, R20, R33, R34.
+- **Anterior:** sobres v2 incompatibles y ausencia de autorización verificable.
+- **Nuevo previsto:** contrato v3 estricto y autorización/cierre/resolución firmados; compatibilidad v2 sin re-firmar; pruebas completas cruzadas.
+- **Decisión:** bytes originales, digests de payload, mensajes independientes hasta 4096 bytes, UTC segundos y ECDSA P-256/DER canónico.
+- **Archivos:** `protocol_v3.py`, `protocol_v2.py` (compatibilidad de sobres históricos y versión estricta), `tests/test_protocol_v3.py`, `tests/fixtures/protocol_v3_vectors.json`, `tests/fixtures/protocol_v3_kotlin_vectors.json` (bytes originales JVM públicos), `docs/protocol_v3.md`, `tools/verify_cross_language.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** v3 nuevo; compatibilidad exterior en v2 preservando bytes firmados; ningún blob v2 ni base existente se modifica.
+- **Pruebas:** 16 pruebas puras Python aprobadas en `tests/test_protocol_v3.py` (siete sobres completos, alteración de campos, firmante ajeno, vínculos, cierre, tipos estrictos, overflow, padding 0/1/2, DER de curva desconocida con `ProtocolError`, JSON malformado, UTC, alcance POS y capacidades SELECT). Verificador cruzado `tools/verify_cross_language.py` valida 7 vectores originales Python, 7 vectores de la fixture Kotlin y los 7 vectores generados en tiempo de ejecución por Android JVM (`CROSS_LANGUAGE_VERIFIED=7`). Suite completa segura aislada (`python -B tools/safe_tests.py --legacy-clock`) completó 61 pruebas exitosas bajo CPython 3.13.13; `git diff --check` sin errores.
+- **Limitaciones:** conexión a persistencia y transportes se completa en C2–C5.
+- **Commit:** `feat(protocol): [TFG-C1-BE-01] definir mensajes v3 verificables`
+- **Impacto académico:** contrato nuevo; no se atribuye flujo integrado ni hardware hasta sus pruebas.
