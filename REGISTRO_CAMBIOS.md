@@ -394,3 +394,20 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** protección local por usuario Windows, no acredita hardware confiable ni gestión comercial de claves.
 - **Commit:** `feat(keys): [TFG-C1-BE-02] proteger emisor externo v3`
 - **Impacto académico:** explicitar confianza en el emisor y límites de protección local.
+
+
+## TFG-C2-BE-01 — Consistencia contable atómica y corrección de rutas
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** COMPROBADO
+- **Hallazgos:** R05, R12, R16, R17, R18, R19, R30.
+- **Anterior:** recargas y pagos actualizaban saldos sin sincronía entre `User.saldo_real` y `Wallet.confirmed_balance_cents`; recargas no usaban SQL atómico; emisión de autorizaciones permitía carreras de sobreasignación; ruta `/verify-signature` fallaba por nombres de parámetros incompatibles; login no reconocía alias de billetera y truncaba silenciosamente en bcrypt; timestamps no garantizaban formato canónico UTC en segundos.
+- **Nuevo previsto:** sincronización bidireccional estricta de saldos; updates atómicos en SQL; exclusión mutua en emisión de autorizaciones; normalización de alias de login y manejo seguro de contraseñas largas; corrección de firma en `/verify-signature`; timestamps UTC estrictos en segundos.
+- **Decisión:** actualizar simultáneamente `saldo_real` y `confirmed_balance_cents` con deltas atómicos; serializar emisión por billetera; admitir alias `wallet-*`, `terminal-*` y `merchant-*`; manejar contraseñas extensas con hash SHA-256 intermedio si superan el límite de bcrypt; corregir firma de `verify_payment_contract_signature` aceptando formato PEM y DER.
+- **Archivos:** `main.py`, `api_v2.py`, `crypto_utils.py`, `sync_v2.py`, `tests/test_c2_accounting.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** cuentas y saldos en pesos y centavos; sin migraciones de esquema requeridas.
+- **Pruebas:** 5 pruebas dedicadas en `tests/test_c2_accounting.py` integradas a la suite segura (`tools/safe_tests.py --legacy-clock`) para un total de 66 pruebas aprobadas: compatibilidad de `/verify-signature` con kwargs de schemas y PEM/DER; hashing y verificación segura de contraseñas de más de 72 bytes evitando colisión por truncamiento; login con alias `wallet-1`, `merchant-2` y `terminal-c2`; recargas concurrentes con 10 hilos sin pérdida de movimientos; y emisión concurrente de autorizaciones con límite atómico estricto impidiendo sobreasignación. `git diff --check` limpio.
+- **Limitaciones:** sin bases de datos reales ni pagos monetarios externos.
+- **Commit:** `feat(accounting): [TFG-C2-BE-01] garantizar consistencia contable y corregir rutas`
+- **Impacto académico:** elimina discrepancias de saldo contable y defectos de integración en autenticación y verificación criptográfica legacy.

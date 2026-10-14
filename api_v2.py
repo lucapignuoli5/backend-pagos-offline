@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 from datetime import datetime, timedelta, timezone
+import threading
 from typing import Annotated
 from uuid import uuid4
 
@@ -166,6 +167,9 @@ def register_key(
     )
 
 
+_AUTH_LOCK = threading.Lock()
+
+
 @router.post("/offline-authorizations", response_model=schemas.OfflineAuthorizationResponse)
 def create_offline_authorization(
     request: schemas.OfflineAuthorizationRequest,
@@ -181,61 +185,62 @@ def create_offline_authorization(
     if key is None or key.revoked or key.owner_user_id != user.id or key.wallet_id != wallet.id or key.purpose != "wallet":
         raise HTTPException(status_code=422, detail="Clave de billetera no valida")
 
-    now = datetime.now(timezone.utc)
-    existing = db.query(models.OfflineAuthorization).filter(
-        models.OfflineAuthorization.wallet_id == wallet.id,
-        models.OfflineAuthorization.wallet_key_id == key.key_id,
-        models.OfflineAuthorization.max_payment_cents == request.max_payment_cents,
-        models.OfflineAuthorization.remaining_amount_cents == request.max_payment_cents * request.max_payments,
-        models.OfflineAuthorization.remaining_payments == request.max_payments,
-        models.OfflineAuthorization.active.is_(True),
-        models.OfflineAuthorization.expires_at > now,
-    ).first()
-    if existing is not None:
-        return schemas.OfflineAuthorizationResponse(
-            authorization_id=existing.id,
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    with _AUTH_LOCK:
+        existing = db.query(models.OfflineAuthorization).filter(
+            models.OfflineAuthorization.wallet_id == wallet.id,
+            models.OfflineAuthorization.wallet_key_id == key.key_id,
+            models.OfflineAuthorization.max_payment_cents == request.max_payment_cents,
+            models.OfflineAuthorization.remaining_amount_cents == request.max_payment_cents * request.max_payments,
+            models.OfflineAuthorization.remaining_payments == request.max_payments,
+            models.OfflineAuthorization.active.is_(True),
+            models.OfflineAuthorization.expires_at > now,
+        ).first()
+        if existing is not None:
+            return schemas.OfflineAuthorizationResponse(
+                authorization_id=existing.id,
+                wallet_id=wallet.id,
+                wallet_key_id=key.key_id,
+                max_payment_cents=existing.max_payment_cents,
+                max_payments=existing.remaining_payments,
+                authorized_total_cents=existing.remaining_amount_cents,
+                issued_at=existing.issued_at,
+                expires_at=existing.expires_at,
+            )
+        committed = db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
+            models.OfflineAuthorization.wallet_id == wallet.id,
+            models.OfflineAuthorization.active.is_(True),
+            models.OfflineAuthorization.expires_at > now,
+        ).scalar()
+        available = wallet.confirmed_balance_cents - int(committed)
+        requested_total = request.max_payment_cents * request.max_payments
+        authorized_total = min(available, requested_total)
+        if authorized_total < request.max_payment_cents:
+            raise HTTPException(status_code=409, detail="Saldo insuficiente para la autorizacion")
+        effective_payments = min(request.max_payments, authorized_total // request.max_payment_cents)
+        authorization = models.OfflineAuthorization(
+            id=str(uuid4()),
             wallet_id=wallet.id,
             wallet_key_id=key.key_id,
-            max_payment_cents=existing.max_payment_cents,
-            max_payments=existing.remaining_payments,
-            authorized_total_cents=existing.remaining_amount_cents,
-            issued_at=existing.issued_at,
-            expires_at=existing.expires_at,
+            max_payment_cents=request.max_payment_cents,
+            remaining_amount_cents=authorized_total,
+            remaining_payments=effective_payments,
+            issued_at=now,
+            expires_at=now + timedelta(seconds=OFFLINE_AUTHORIZATION_SECONDS),
+            active=True,
         )
-    committed = db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
-        models.OfflineAuthorization.wallet_id == wallet.id,
-        models.OfflineAuthorization.active.is_(True),
-        models.OfflineAuthorization.expires_at > now,
-    ).scalar()
-    available = wallet.confirmed_balance_cents - int(committed)
-    requested_total = request.max_payment_cents * request.max_payments
-    authorized_total = min(available, requested_total)
-    if authorized_total < request.max_payment_cents:
-        raise HTTPException(status_code=409, detail="Saldo insuficiente para la autorizacion")
-    effective_payments = min(request.max_payments, authorized_total // request.max_payment_cents)
-    authorization = models.OfflineAuthorization(
-        id=str(uuid4()),
-        wallet_id=wallet.id,
-        wallet_key_id=key.key_id,
-        max_payment_cents=request.max_payment_cents,
-        remaining_amount_cents=authorized_total,
-        remaining_payments=effective_payments,
-        issued_at=now,
-        expires_at=now + timedelta(seconds=OFFLINE_AUTHORIZATION_SECONDS),
-        active=True,
-    )
-    db.add(authorization)
-    db.commit()
-    return schemas.OfflineAuthorizationResponse(
-        authorization_id=authorization.id,
-        wallet_id=wallet.id,
-        wallet_key_id=key.key_id,
-        max_payment_cents=authorization.max_payment_cents,
-        max_payments=authorization.remaining_payments,
-        authorized_total_cents=authorization.remaining_amount_cents,
-        issued_at=authorization.issued_at,
-        expires_at=authorization.expires_at,
-    )
+        db.add(authorization)
+        db.commit()
+        return schemas.OfflineAuthorizationResponse(
+            authorization_id=authorization.id,
+            wallet_id=wallet.id,
+            wallet_key_id=key.key_id,
+            max_payment_cents=authorization.max_payment_cents,
+            max_payments=authorization.remaining_payments,
+            authorized_total_cents=authorization.remaining_amount_cents,
+            issued_at=authorization.issued_at,
+            expires_at=authorization.expires_at,
+        )
 
 
 @router.get("/wallets/{wallet_id}/balance", response_model=schemas.WalletBalanceResponse)

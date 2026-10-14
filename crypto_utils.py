@@ -5,22 +5,34 @@ from cryptography.exceptions import InvalidSignature
 
 
 def verify_payment_contract_signature(
-    payload_str: str,
-    signature_b64: str,
-    public_key_b64: str,
+    payload_str: str | None = None,
+    signature_b64: str | None = None,
+    public_key_b64: str | None = None,
+    contract_json: str | None = None,
+    signature: str | None = None,
+    public_key_pem: str | None = None,
 ) -> bool:
+    payload = payload_str if payload_str is not None else contract_json
+    sig = signature_b64 if signature_b64 is not None else signature
+    pub = public_key_b64 if public_key_b64 is not None else public_key_pem
+    if payload is None or sig is None or pub is None:
+        return False
     try:
-        # 1. Decodificar la clave pública de Base64 a bytes (DER)
-        pub_key_bytes = base64.b64decode(public_key_b64)
-        public_key = serialization.load_der_public_key(pub_key_bytes)
+        pub_clean = pub.strip()
+        if "BEGIN PUBLIC KEY" in pub_clean:
+            public_key = serialization.load_pem_public_key(pub_clean.encode("utf-8"))
+        else:
+            pub_key_bytes = base64.b64decode(pub_clean, validate=True)
+            public_key = serialization.load_der_public_key(pub_key_bytes)
 
-        # 2. Decodificar la firma de Base64 a bytes
-        signature_bytes = base64.b64decode(signature_b64)
+        signature_bytes = base64.b64decode(sig.strip(), validate=True)
 
-        # 3. Verificar la firma usando SHA256 y curva elíptica ECDSA
+        if not isinstance(public_key, ec.EllipticCurvePublicKey):
+            return False
+
         public_key.verify(
             signature_bytes,
-            payload_str.encode('utf-8'),
+            payload.encode("utf-8"),
             ec.ECDSA(hashes.SHA256())
         )
         return True

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -254,10 +255,23 @@ def _apply_payment(
         db.commit()
         return _result(payment.operation_id, "REJECTED", persisted.rejection_code)
 
+    amount_decimal = Decimal(amount) / Decimal("100")
+    db.execute(
+        update(models.User)
+        .where(models.User.id == context.wallet.user_id)
+        .values(saldo_real=models.User.saldo_real - amount_decimal)
+        .execution_options(synchronize_session=False)
+    )
     db.execute(
         update(models.Wallet)
         .where(models.Wallet.id == context.merchant_wallet.id)
         .values(confirmed_balance_cents=models.Wallet.confirmed_balance_cents + amount)
+        .execution_options(synchronize_session=False)
+    )
+    db.execute(
+        update(models.User)
+        .where(models.User.id == context.merchant_wallet.user_id)
+        .values(saldo_real=models.User.saldo_real + amount_decimal)
         .execution_options(synchronize_session=False)
     )
     db.add_all(

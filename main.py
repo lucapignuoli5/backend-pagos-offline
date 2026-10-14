@@ -7,13 +7,14 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
+import hashlib
 import os
 import re
 import bcrypt
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, inspect
+from sqlalchemy import func, inspect, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -59,13 +60,27 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_THROTTLE = LoginThrottle(maximum_attempts=MAX_LOGIN_ATTEMPTS, lock_seconds=300)
 
 
+def _normalize_password_for_bcrypt(password: str) -> bytes:
+    raw = password.encode("utf-8")
+    if len(raw) > 72:
+        return hashlib.sha256(raw).hexdigest().encode("ascii")
+    return raw
+
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    raw = _normalize_password_for_bcrypt(password)
+    return bcrypt.hashpw(raw, bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("ascii"))
+        raw = _normalize_password_for_bcrypt(plain_password)
+        hashed = hashed_password.encode("ascii")
+        if bcrypt.checkpw(raw, hashed):
+            return True
+        if len(plain_password.encode("utf-8")) > 72:
+            return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hashed)
+        return False
     except (UnicodeError, ValueError):
         return False
 
@@ -159,7 +174,7 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Autenticacion no configurada",
         )
-    identificador = payload.usuario or payload.token_id or ""
+    identificador = (payload.usuario or payload.token_id or "").strip()
     client_ip = request.client.host if request.client else "unknown"
     throttle_key = f"{client_ip}:{identificador.casefold()}"
     LOGIN_THROTTLE.check(throttle_key)
@@ -167,7 +182,23 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
 
     if identificador.isdigit():
         usuario = db.get(models.User, int(identificador))
-    else:
+    elif identificador.lower().startswith("wallet-"):
+        wallet = db.get(models.Wallet, identificador)
+        if wallet is not None:
+            usuario = db.get(models.User, wallet.user_id)
+        else:
+            cand = identificador[7:]
+            if cand.isdigit():
+                usuario = db.get(models.User, int(cand))
+    elif identificador.lower().startswith("merchant-"):
+        cand = identificador[9:]
+        if cand.isdigit():
+            usuario = db.get(models.User, int(cand))
+    elif identificador.lower().startswith("terminal-"):
+        term = db.get(models.Terminal, identificador)
+        if term is not None:
+            usuario = db.get(models.User, term.merchant_user_id)
+    if usuario is None:
         usuario = (
             db.query(models.User)
             .filter(func.lower(models.User.nombre) == identificador.lower())
@@ -175,7 +206,8 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         )
 
     if usuario is None or not usuario.password_hash:
-        bcrypt.checkpw(payload.password.encode("utf-8"), DUMMY_PASSWORD_HASH)
+        raw_pwd = _normalize_password_for_bcrypt(payload.password)
+        bcrypt.checkpw(raw_pwd, DUMMY_PASSWORD_HASH)
         password_valid = False
     else:
         password_valid = verify_password(payload.password, usuario.password_hash)
@@ -209,6 +241,14 @@ def registrar_usuario(usuario: schemas.UserCreate, db: DbSession) -> models.User
     db.add(nuevo_usuario)
     db.commit()
     db.refresh(nuevo_usuario)
+    wallet = models.Wallet(
+        id=f"wallet-{nuevo_usuario.id}",
+        user_id=nuevo_usuario.id,
+        confirmed_balance_cents=int(nuevo_usuario.saldo_real * Decimal("100")),
+        currency="ARS",
+    )
+    db.add(wallet)
+    db.commit()
     return nuevo_usuario
 
 
@@ -220,6 +260,13 @@ def consultar_saldo(user_id: int, db: DbSession) -> models.User:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
+    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == usuario.id).first()
+    if wallet is not None:
+        expected_saldo = Decimal(wallet.confirmed_balance_cents) / Decimal("100")
+        if usuario.saldo_real != expected_saldo:
+            usuario.saldo_real = expected_saldo
+            db.commit()
+            db.refresh(usuario)
     return usuario
 
 
@@ -228,17 +275,54 @@ def consultar_saldo(user_id: int, db: DbSession) -> models.User:
     response_model=schemas.RecargaResponse,
 )
 def recargar_saldo(payload: schemas.RecargaRequest, db: Session = Depends(get_db)) -> dict[str, object]:
-    cliente = (
-        db.query(models.User)
-        .filter(func.lower(models.User.nombre) == payload.token_id.lower())
-        .first()
-    )
+    identificador = (payload.token_id or "").strip()
+    cliente = None
+    if identificador.isdigit():
+        cliente = db.get(models.User, int(identificador))
+    elif identificador.lower().startswith("wallet-"):
+        wallet = db.get(models.Wallet, identificador)
+        if wallet is not None:
+            cliente = db.get(models.User, wallet.user_id)
+        else:
+            cand = identificador[7:]
+            if cand.isdigit():
+                cliente = db.get(models.User, int(cand))
+    if cliente is None:
+        cliente = (
+            db.query(models.User)
+            .filter(func.lower(models.User.nombre) == identificador.lower())
+            .first()
+        )
 
     if not cliente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
 
     monto_decimal = Decimal(str(payload.monto_recarga))
-    cliente.saldo_real += monto_decimal
+    if not monto_decimal.is_finite() or monto_decimal <= 0:
+        raise HTTPException(status_code=422, detail="Monto invalido")
+    amount_cents = int(monto_decimal * Decimal("100"))
+
+    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == cliente.id).first()
+    if wallet is None:
+        wallet = models.Wallet(
+            id=f"wallet-{cliente.id}",
+            user_id=cliente.id,
+            confirmed_balance_cents=int(cliente.saldo_real * Decimal("100")),
+            currency="ARS",
+        )
+        db.add(wallet)
+        db.flush()
+
+    db.execute(
+        update(models.Wallet)
+        .where(models.Wallet.id == wallet.id)
+        .values(confirmed_balance_cents=models.Wallet.confirmed_balance_cents + amount_cents)
+    )
+    db.execute(
+        update(models.User)
+        .where(models.User.id == cliente.id)
+        .values(saldo_real=models.User.saldo_real + monto_decimal)
+    )
     db.commit()
     db.refresh(cliente)
 
