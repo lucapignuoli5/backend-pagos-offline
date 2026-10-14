@@ -531,3 +531,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** usuarios heredados con hashes truncados requieren ejecutar intencionalmente la herramienta administrativa con la base elegida; rate limiting distribuido queda fuera del prototipo local.
 - **Commit:** `fix(auth): [TFG-C2-BE-06] cerrar aliases y fallos externos`
 - **Impacto académico:** evita presentar como resueltos los controles de acceso mediante comportamientos heredados ambiguos.
+
+## TFG-C7-DOC-02 — Cerrar programación backend/POS sin atribuir ejecución
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** instrucciones y registros reflejan compromisos, cierres, resoluciones firmadas, recarga simulada, webhook aislado y POS v3, conservando la evidencia anterior como antecedente.
+- **Archivos:** `AGENTS.md`, registros consolidados y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** no se afirma arranque, migración, HTTP, concurrencia, Qt, PC/SC ni hardware.
+- **Commit:** `docs(corrections): [TFG-C7-DOC-02] cerrar programacion backend pendiente`
+- **Impacto académico:** deja trazabilidad vigente sin modificar la Entrega 4 presentada.
