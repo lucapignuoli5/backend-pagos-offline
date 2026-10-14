@@ -308,3 +308,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se ejecutaron servicios de pago reales, dos teléfonos físicos, ACR122U ni mediciones de latencia.
 - **Commit:** `docs(review): [TFG-F6-RV-01] cerrar flujos secundarios`
 - **Impacto académico:** acredita código y simuladores, manteniendo explícita la evidencia física y experimental pendiente.
+
+## TFG-F7-BE-01 — Generar evidencia temporal reproducible del simulador
+
+- **Fecha:** 2026-10-14
+- **Fase:** 7 — Evidencia final y documentación académica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** ejecutar al menos veinte repeticiones por configuración disponible, separar confirmación humana y reportar mediana y percentil 95 sin atribuir resultados al ACR122U.
+- **Comportamiento anterior:** el flujo POS simulado tenía pruebas funcionales, pero no un ejecutor ni un resultado temporal reproducible.
+- **Comportamiento nuevo:** un ejecutor aislado crea operaciones temporales, excluye tres calentamientos, mide veinte repeticiones de entrega de solicitud y comprobante/acuse con la confirmación fuera del cronómetro, y conserva muestras y resumen JSON.
+- **Decisión:** medir por separado entrega electrónica de solicitud y recuperación de comprobante/acuse con `perf_counter_ns`; preparar la confirmación simulada fuera del intervalo y calcular p95 por rango más próximo.
+- **Archivos:** `benchmarks/pos_simulator_latency.py`, `tests/test_benchmark.py`, `evidence/pos_simulator_latency_2026-10-14.json`, `evidence/README.md`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** ninguno; se mide el flujo simulado existente con base SQLite temporal y sin red.
+- **Pruebas:** 35 pruebas backend correctas. En 20 repeticiones, la entrega de solicitud obtuvo mediana 20,820600 ms y p95 33,827300 ms; comprobante y acuse, mediana 32,770000 ms y p95 37,663900 ms; total electrónico, mediana 55,199650 ms y p95 65,045300 ms.
+- **Limitaciones:** el simulador en memoria no representa USB, PC/SC, RF, Android real ni confirmación humana; la cifra no valida el objetivo de p95 en hardware.
+- **Commit:** `test(evidence): [TFG-F7-BE-01] medir flujo pos simulado`
+- **Impacto académico:** aporta una línea base reproducible sin presentar la meta de 500 ms como validada físicamente.
