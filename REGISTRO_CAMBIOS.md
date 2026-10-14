@@ -411,3 +411,20 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** sin bases de datos reales ni pagos monetarios externos.
 - **Commit:** `feat(accounting): [TFG-C2-BE-01] garantizar consistencia contable y corregir rutas`
 - **Impacto académico:** elimina discrepancias de saldo contable y defectos de integración en autenticación y verificación criptográfica legacy.
+
+
+## TFG-C2-BE-02 — Conciliación tardía e idempotencia estricta
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** COMPROBADO
+- **Hallazgos:** R03, R04.
+- **Anterior:** la conciliación offline rechazaba pagos válidos si la sincronización ocurría después del vencimiento de la autorización (`expires_at > now` evaluado en tiempo de sincronización); reenvíos de evidencia en estados finales podían recalcular transitoriamente o generar respuestas inestables.
+- **Nuevo previsto:** admitir conciliación tardía de comprobantes emitidos válidamente dentro de la ventana de autorización; garantizar inmutabilidad e idempotencia estricta de resultados finales ante reenvíos sucesivos.
+- **Decisión:** retirar la restricción de reloj en tiempo de sincronización dentro de `_apply_payment`, manteniendo la validación estricta de que la emisión del comprobante ocurrió dentro de la ventana de validez de la autorización; retornar el estado final persistido de forma determinista ante cualquier reintento con evidencia idéntica.
+- **Archivos:** `sync_v2.py`, `tests/test_c2_reconciliation.py`, `tests/test_c2_accounting.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** conciliación de evidencia v2 y v3; sin cambios de esquema.
+- **Pruebas:** 3 pruebas dedicadas en `tests/test_c2_reconciliation.py` integradas a la suite segura (`tools/safe_tests.py --legacy-clock`) para un total de 69 pruebas aprobadas: (1) conciliación tardía efectiva de pago emitido dentro de la autorización luego de vencida la ventana de sincronización sin pérdida de fondos; (2) idempotencia e inmutabilidad estricta de reenvío de pagos aceptados tanto por cliente como por comercio incluso tras la revocación posterior de la clave; (3) progresión y estabilidad de entregas parciales (PENDING_EVIDENCE -> ACCEPTED) sin conflictos de sobre. `git diff --check` limpio.
+- **Limitaciones:** sin dispositivos móviles ni lectores físicos.
+- **Commit:** `feat(sync): [TFG-C2-BE-02] admitir conciliacion tardia e idempotencia estricta`
+- **Impacto académico:** demuestra la naturaleza desconectada del sistema, permitiendo que la evidencia offline sea acreditada al recuperar conectividad sin importar la demora de sincronización, siempre que el pago fuera válido al emitirse.

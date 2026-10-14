@@ -230,6 +230,7 @@ class C2AccountingAndRouteTests(unittest.TestCase):
         def request_auth():
             with Session(self.engine) as session:
                 try:
+                    user = session.get(models.User, 1)
                     res = create_offline_authorization(
                         schemas.OfflineAuthorizationRequest(
                             wallet_id="wallet-1",
@@ -238,7 +239,7 @@ class C2AccountingAndRouteTests(unittest.TestCase):
                             max_payments=1,
                         ),
                         session,
-                        self.client_user,
+                        user,
                     )
                     results.append(res)
                 except HTTPException as e:

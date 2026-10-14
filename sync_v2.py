@@ -81,6 +81,10 @@ def process_evidence(
                 db.rollback()
                 return _result(operation_id, "CONFLICT", "ACK_MISMATCH")
 
+        if existing is not None and existing.state in {"ACCEPTED", "REJECTED"}:
+            _authorize_participant(db, user, existing.wallet_id, existing.terminal_id)
+            return _result(operation_id, existing.state, existing.rejection_code)
+
         context = _validate_evidence(db, request, receipt, ack_wire)
         _authorize_participant(db, user, context.wallet.id, context.terminal.id)
 
@@ -226,7 +230,6 @@ def _apply_payment(
         .where(
             models.OfflineAuthorization.id == context.authorization.id,
             models.OfflineAuthorization.active.is_(True),
-            models.OfflineAuthorization.expires_at > now,
             models.OfflineAuthorization.remaining_amount_cents >= amount,
             models.OfflineAuthorization.remaining_payments > 0,
         )
