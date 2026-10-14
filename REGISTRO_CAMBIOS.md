@@ -245,3 +245,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la sesión del comercio se obtiene online y no se guarda en disco.
 - **Commit:** `feat(sync): [TFG-F5-POS-01] conciliar cola durable del POS`
 - **Impacto académico:** demuestra que la PC puede conciliar independientemente del teléfono.
+
+## TFG-F5-BE-01 — Verificar ambos órdenes de conciliación
+
+- **Fecha:** 2026-10-14
+- **Fase:** 5 — Conciliación independiente
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la conciliación debe admitir que el POS o el teléfono llegue primero y debe mantener un único movimiento contable ante repeticiones.
+- **Comportamiento anterior:** existía evidencia automatizada del orden teléfono→POS→teléfono, pero no una prueba explícita del orden POS→teléfono.
+- **Comportamiento nuevo:** una prueba separada sincroniza primero la evidencia completa del POS, después la evidencia sin acuse del teléfono y finalmente repite el POS; los tres intentos obtienen el mismo resultado aceptado y solo existen dos asientos contables.
+- **Decisión:** fijar ambos órdenes como comportamiento contractual del endpoint v2.
+- **Archivos:** `tests/test_sync_v2.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** idempotencia de `POST /api/offline-payments/sync` para evidencia parcial o completa de una operación ya aceptada.
+- **Pruebas:** 31 pruebas `unittest` correctas en SQLite temporal; la nueva prueba acredita POS→teléfono→POS, y la existente teléfono→POS→teléfono. En ambos casos persisten exactamente dos asientos para una operación aceptada.
+- **Limitaciones:** prueba el orden lógico del servidor; la entrega física sigue pendiente del ACR122U.
+- **Commit:** `test(sync): [TFG-F5-BE-01] verificar ambos ordenes de conciliacion`
+- **Impacto académico:** aporta evidencia reproducible de conciliación independiente sin doble aplicación.

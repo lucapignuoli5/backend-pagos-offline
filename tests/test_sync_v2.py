@@ -97,6 +97,21 @@ class SyncV2Tests(unittest.TestCase):
         self.assertEqual(self.authorization.remaining_payments, 9)
         self.assertEqual(self.db.query(models.LedgerEntry).count(), 2)
 
+    def test_pos_first_then_phone_without_ack_returns_same_result(self):
+        pending, completed = self._evidence("123e4567-e89b-42d3-a456-426614174021", 2_500)
+
+        pos_result = process_evidence(self.db, self.merchant, completed)
+        phone_result = process_evidence(self.db, self.client, pending)
+        repeated_pos_result = process_evidence(self.db, self.merchant, completed)
+
+        self.assertEqual(pos_result.status, "ACCEPTED")
+        self.assertEqual(phone_result.status, "ACCEPTED")
+        self.assertEqual(repeated_pos_result.status, "ACCEPTED")
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.Wallet, "wallet-1").confirmed_balance_cents, 7_500)
+        self.assertEqual(self.db.get(models.Wallet, "wallet-2").confirmed_balance_cents, 2_500)
+        self.assertEqual(self.db.query(models.LedgerEntry).count(), 2)
+
     def test_same_id_with_other_content_is_conflict(self):
         _, completed = self._evidence("123e4567-e89b-42d3-a456-426614174002", 2_000)
         self.assertEqual(process_evidence(self.db, self.client, completed).status, "ACCEPTED")
