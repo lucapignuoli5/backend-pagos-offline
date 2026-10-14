@@ -9,6 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from protocol_v2 import canonical_bytes, sign_payload
+from protocol_v3 import MessageType, decode_base64, parse_signed_envelope, payload_digest, public_key_fingerprint, validate_payload
 from pos_desktop.config import PosConfig
 from pos_desktop.key_store import PosKeyStore
 
@@ -90,6 +91,7 @@ class PosBackendClient:
         if not isinstance(results, list) or any(not isinstance(item, dict) for item in results):
             raise RuntimeError("Respuesta de conciliacion invalida")
         normalized = []
+        submitted = {item.get("operation_id"): item for item in operations}
         for result in results:
             submission = result.get("submission_status")
             operation = result.get("operation_status")
@@ -99,13 +101,48 @@ class PosBackendClient:
                 status = "RETRYABLE_ERROR"
             elif submission == "INVALID_EVIDENCE":
                 status = "CONFLICT"
-            elif operation in {"ACCEPTED", "REJECTED", "PENDING_EVIDENCE"}:
+            elif operation in {"ACCEPTED", "REJECTED"}:
+                evidence = submitted.get(result.get("operation_id"))
+                status = operation if result.get("final") is True and self._valid_resolution(result, evidence) else "RETRYABLE_ERROR"
+            elif operation == "PENDING_EVIDENCE":
                 status = operation
             else:
                 status = "PENDING_EVIDENCE"
             normalized.append({"operation_id": result.get("operation_id"), "status": status,
                                "code": result.get("code")})
         return normalized
+
+    def _valid_resolution(self, result: dict, evidence: dict | None) -> bool:
+        try:
+            if evidence is None or not self.config.issuer_public_key_b64 or not self.config.issuer_key_id:
+                return False
+            wire = base64.b64decode(result["resolution_envelope_b64"], validate=True)
+            resolution = parse_signed_envelope(wire)
+            if validate_payload(resolution.payload) is not MessageType.PAYMENT_RESOLUTION:
+                return False
+            request = parse_signed_envelope(base64.b64decode(evidence["request_envelope_b64"], validate=True))
+            grant = parse_signed_envelope(base64.b64decode(evidence["authorization_envelope_b64"], validate=True))
+            receipt = parse_signed_envelope(base64.b64decode(evidence["receipt_envelope_b64"], validate=True))
+            payload = resolution.payload
+            return (
+                resolution.verify(self.config.issuer_public_key_b64)
+                and payload["issuer_key_id"] == self.config.issuer_key_id
+                and payload["issuer_key_fingerprint"] == public_key_fingerprint(
+                    decode_base64(self.config.issuer_public_key_b64)
+                )
+                and payload["operation_id"] == evidence["operation_id"]
+                and payload["operation_status"] == result["operation_status"]
+                and payload["wallet_id"] == receipt.payload["wallet_id"]
+                and payload["merchant_id"] == request.payload["merchant_id"]
+                and payload["terminal_id"] == request.payload["terminal_id"]
+                and payload["amount_cents"] == request.payload["amount_cents"]
+                and payload["offline_authorization_id"] == receipt.payload["offline_authorization_id"]
+                and payload["request_digest"] == payload_digest(request)
+                and payload["authorization_digest"] == payload_digest(grant)
+                and payload["receipt_digest"] == payload_digest(receipt)
+            )
+        except (KeyError, TypeError, ValueError):
+            return False
 
     def get_operation_status(self, access_token: str, operation_id: str) -> dict:
         value = self._get_object(f"/api/offline-payments/{operation_id}", access_token)

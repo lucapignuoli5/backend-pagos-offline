@@ -502,3 +502,18 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** validación HTTP, concurrencia y rollback permanecen pendientes.
 - **Commit:** `feat(v3): [TFG-C5-BE-01] integrar conciliacion y POS v3`
+
+## TFG-C2-BE-05 — Cerrar contabilidad, idempotencia y resoluciones v3
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Hallazgos:** R03, R04, R05, R10, R12, R18, R29 y reglas de cierre verificable.
+- **Anterior:** la emisión v3 no tenía clave idempotente durable, el saldo no exponía compromisos vencidos sin resolver, un cierre concurrente podía competir y Android/POS confiaban en el estado HTTP sin una resolución final firmada. Persistían rutas públicas capaces de crear usuarios, recargar o aplicar el formato heredado.
+- **Nuevo:** la autorización usa `request_id` único, bloquea cuentas en revisión y reserva con escritura serializada; el saldo resta compromisos abiertos aunque estén vencidos. El cierre verifica cada evidencia y se aplica de forma condicionada, mientras evidencia omitida queda persistida en revisión y bloquea nuevas autorizaciones. Cada aceptación v3 crea una resolución firmada por el emisor dentro de la misma transacción; Android y POS la verifican antes de tratar el resultado como final. Se retiran explícitamente las rutas mutantes heredadas y se incorpora recarga simulada v3 autenticada, idempotente y expresada en centavos. Mercado Pago exige secreto de webhook, orden propia, cuenta, moneda e importe esperados.
+- **Archivos:** `.env.example`, `models.py`, `migrations.py`, `schemas.py`, `api_v2.py`, `api_v3.py`, `sync_v3.py`, `main.py`, `settings.py`, `pos_desktop/backend_client.py` y `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** columnas aditivas `issuance_request_id` y `offline_review_required`; tablas nuevas de recargas simuladas y órdenes externas; resultado v3 incluye `resolution_envelope_b64`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** API, migraciones, concurrencia, rollback y simulador de webhook quedan para validación agrupada; no se contactó Mercado Pago.
+- **Commit:** `fix(accounting): [TFG-C2-BE-05] cerrar resoluciones y recargas v3`
+- **Impacto académico:** completa la programación de C2 sin atribuir atomicidad ni interoperabilidad comprobadas hasta ejecutar la matriz posterior.

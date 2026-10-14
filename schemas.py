@@ -164,6 +164,7 @@ class WalletBalanceResponse(BaseModel):
     confirmed_balance_cents: int
     authorized_offline_cents: int
     available_for_authorization_cents: int
+    review_required: bool = False
 
 
 class OfflinePaymentEvidence(BaseModel):
@@ -201,6 +202,7 @@ class OfflinePaymentResultV3(BaseModel):
     operation_status: Literal["UNRESOLVED", "PENDING_EVIDENCE", "PENDING_REVIEW", "ACCEPTED", "REJECTED"]
     final: bool
     code: Optional[str] = None
+    resolution_envelope_b64: Optional[str] = None
 
 
 class OfflinePaymentSyncV3Response(BaseModel):
@@ -214,6 +216,7 @@ class OfflinePaymentStatusResponse(BaseModel):
 
 
 class OfflineAuthorizationV3Request(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=120)
     wallet_id: str = Field(..., min_length=1, max_length=120)
     wallet_key_id: str = Field(..., min_length=1, max_length=120)
     max_payment_cents: int = Field(..., strict=True, gt=0)
@@ -242,3 +245,16 @@ class OfflineAuthorizationCloseRequest(BaseModel):
 
 class PaymentResolutionRequest(BaseModel):
     resolution_envelope_b64: str = Field(..., min_length=1, max_length=8192)
+
+
+class SimulatedTopupRequest(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=120)
+    wallet_id: str = Field(..., min_length=1, max_length=120)
+    amount_cents: int = Field(..., strict=True, gt=0, le=100_000_000)
+
+
+class SimulatedTopupResponse(BaseModel):
+    request_id: str
+    wallet_id: str
+    amount_cents: int
+    confirmed_balance_cents: int

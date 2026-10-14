@@ -11,7 +11,7 @@ from uuid import uuid4
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -255,19 +255,28 @@ def get_wallet_balance(wallet_id: str, db: DbSession, user: CurrentUser) -> sche
         raise HTTPException(status_code=404, detail="Billetera no encontrada")
     if wallet.user_id != user.id:
         raise HTTPException(status_code=403, detail="Billetera no autorizada")
-    now = utc_now()
-    authorized = int(
+    committed_v3 = int(
+        db.query(func.coalesce(func.sum(
+            models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents
+        ), 0)).filter(
+            models.OfflineCommitment.wallet_id == wallet.id,
+            models.OfflineCommitment.closed.is_(False),
+        ).scalar()
+    )
+    committed_legacy = int(
         db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
             models.OfflineAuthorization.wallet_id == wallet.id,
             models.OfflineAuthorization.active.is_(True),
-            models.OfflineAuthorization.expires_at > now,
+            ~models.OfflineAuthorization.id.in_(select(models.OfflineCommitment.authorization_id)),
         ).scalar()
     )
+    authorized = committed_v3 + committed_legacy
     return schemas.WalletBalanceResponse(
         wallet_id=wallet.id,
         confirmed_balance_cents=wallet.confirmed_balance_cents,
         authorized_offline_cents=authorized,
         available_for_authorization_cents=max(wallet.confirmed_balance_cents - authorized, 0),
+        review_required=wallet.offline_review_required,
     )
 
 

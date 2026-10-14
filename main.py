@@ -8,8 +8,10 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 import hashlib
+import hmac
 import os
 import re
+from uuid import uuid4
 import bcrypt
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -27,7 +29,7 @@ import models
 import schemas
 from api_v2 import router as api_v2_router
 from api_v3 import router as api_v3_router
-from auth import LoginThrottle, create_access_token
+from auth import LoginThrottle, create_access_token, get_current_user, require_role
 from sync_v2 import router as sync_v2_router
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
@@ -40,6 +42,7 @@ from settings import (
     MERCADO_PAGO_ACCESS_TOKEN,
     MERCADO_PAGO_ENABLED,
     MERCADO_PAGO_NOTIFICATION_URL,
+    MERCADO_PAGO_WEBHOOK_SECRET,
     NGROK_AUTH_TOKEN,
     NGROK_DOMAIN,
     NGROK_ENABLED,
@@ -167,6 +170,7 @@ async def validation_exception_handler(request, exc):
 
 
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[models.User, Depends(get_current_user)]
 
 
 @app.post("/api/login", response_model=schemas.LoginResponse)
@@ -236,6 +240,7 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
     status_code=status.HTTP_201_CREATED,
 )
 def registrar_usuario(usuario: schemas.UserCreate, db: DbSession) -> models.User:
+    raise HTTPException(status_code=410, detail="Alta publica retirada; use aprovisionamiento administrativo")
     nuevo_usuario = models.User(
         nombre=usuario.nombre,
         saldo_real=usuario.saldo_real,
@@ -256,6 +261,7 @@ def registrar_usuario(usuario: schemas.UserCreate, db: DbSession) -> models.User
 
 @app.get("/usuarios/{user_id}/saldo", response_model=schemas.UserSaldo)
 def consultar_saldo(user_id: int, db: DbSession) -> models.User:
+    raise HTTPException(status_code=410, detail="Consulta retirada; use /api/wallets/{id}/balance")
     usuario = db.get(models.User, user_id)
     if usuario is None:
         raise HTTPException(
@@ -277,6 +283,7 @@ def consultar_saldo(user_id: int, db: DbSession) -> models.User:
     response_model=schemas.RecargaResponse,
 )
 def recargar_saldo(payload: schemas.RecargaRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    raise HTTPException(status_code=410, detail="Recarga retirada; use /api/v3/simulated-topups")
     identificador = (payload.token_id or "").strip()
     cliente = None
     if identificador.isdigit():
@@ -335,12 +342,29 @@ def recargar_saldo(payload: schemas.RecargaRequest, db: Session = Depends(get_db
 
 
 @app.post("/api/billetera/crear-link-pago")
-def crear_link(payload: schemas.LinkPagoRequest) -> dict:
-    if mp_sdk is None or not MERCADO_PAGO_NOTIFICATION_URL:
+def crear_link(
+    payload: schemas.LinkPagoRequest,
+    db: DbSession,
+    user: Annotated[models.User, Depends(require_role("cliente"))],
+) -> dict:
+    if mp_sdk is None or not MERCADO_PAGO_NOTIFICATION_URL or not MERCADO_PAGO_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Integracion de pagos externos deshabilitada",
         )
+    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user.id).one_or_none()
+    if wallet is None or payload.token_id != wallet.id:
+        raise HTTPException(status_code=403, detail="Billetera de recarga no autorizada")
+    amount = Decimal(str(payload.monto))
+    cents = amount * Decimal("100")
+    if not amount.is_finite() or amount <= 0 or cents != cents.to_integral_value():
+        raise HTTPException(status_code=422, detail="Importe de recarga invalido")
+    order = models.ExternalTopupOrder(
+        id=str(uuid4()), wallet_id=wallet.id, user_id=user.id,
+        amount_cents=int(cents), currency="ARS", status="PENDING",
+    )
+    db.add(order)
+    db.flush()
     preference_data = {
         "items": [
             {
@@ -350,25 +374,28 @@ def crear_link(payload: schemas.LinkPagoRequest) -> dict:
                 "unit_price": payload.monto,
             }
         ],
-        "external_reference": payload.token_id,
+        "external_reference": order.id,
         "notification_url": MERCADO_PAGO_NOTIFICATION_URL,
     }
 
     preference_response = mp_sdk.preference().create(preference_data)
 
     if preference_response["status"] == 201:
+        db.commit()
         return {"init_point": preference_response["response"]["init_point"]}
     else:
+        db.rollback()
         raise HTTPException(status_code=400, detail="Error al crear link de MP")
 
 
 @app.post("/webhook/mercadopago")
 async def mp_webhook(request: Request, db: DbSession):
-    if mp_sdk is None:
+    if mp_sdk is None or not MERCADO_PAGO_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Integracion de pagos externos deshabilitada",
         )
+    _verify_mercado_pago_signature(request)
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(status_code=422, detail="Notificacion invalida")
@@ -400,17 +427,16 @@ async def mp_webhook(request: Request, db: DbSession):
                 if not amount.is_finite() or amount <= 0 or cents_value != cents_value.to_integral_value():
                     raise HTTPException(status_code=422, detail="Importe externo invalido")
                 amount_cents = int(cents_value)
-
-                user = (
-                    db.query(models.User)
-                    .filter(func.lower(models.User.nombre) == external_ref.lower())
-                    .first()
-                )
-                if user is None:
-                    raise HTTPException(status_code=404, detail="Usuario de recarga no encontrado")
-                wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user.id).first()
-                if wallet is None:
-                    raise HTTPException(status_code=409, detail="Billetera de recarga no disponible")
+                order = db.get(models.ExternalTopupOrder, external_ref)
+                if order is None:
+                    raise HTTPException(status_code=404, detail="Orden de recarga no encontrada")
+                currency = payment.get("currency_id")
+                if currency != order.currency or amount_cents != order.amount_cents:
+                    raise HTTPException(status_code=409, detail="Pago externo no coincide con la orden")
+                user = db.get(models.User, order.user_id)
+                wallet = db.get(models.Wallet, order.wallet_id)
+                if user is None or wallet is None or wallet.user_id != user.id:
+                    raise HTTPException(status_code=409, detail="Cuenta receptora invalida")
 
                 existing = _external_payment_event(db, payment_identifier)
                 if existing is not None:
@@ -432,6 +458,7 @@ async def mp_webhook(request: Request, db: DbSession):
                     db.flush()
                     user.saldo_real += amount
                     wallet.confirmed_balance_cents += amount_cents
+                    order.status = "APPLIED"
                     db.commit()
                 except IntegrityError as exc:
                     db.rollback()
@@ -444,6 +471,26 @@ async def mp_webhook(request: Request, db: DbSession):
                 return {"status": "ok", "result": "applied"}
 
     return {"status": "ok", "result": "ignored"}
+
+
+def _verify_mercado_pago_signature(request: Request) -> None:
+    signature = request.headers.get("x-signature", "")
+    request_id = request.headers.get("x-request-id", "")
+    parts = {}
+    for item in signature.split(","):
+        key, separator, value = item.strip().partition("=")
+        if separator and key in {"ts", "v1"}:
+            parts[key] = value
+    data_id = request.query_params.get("data.id") or request.query_params.get("id")
+    if not data_id or not request_id or not parts.get("ts") or not parts.get("v1"):
+        raise HTTPException(status_code=401, detail="Firma de webhook requerida")
+    manifest = f"id:{str(data_id).lower()};request-id:{request_id};ts:{parts['ts']};"
+    expected = hmac.new(
+        MERCADO_PAGO_WEBHOOK_SECRET.encode("utf-8"),
+        manifest.encode("utf-8"), hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected, parts["v1"]):
+        raise HTTPException(status_code=401, detail="Firma de webhook invalida")
 
 
 def _external_payment_event(db: Session, payment_id: str) -> models.ExternalPaymentEvent | None:
@@ -571,6 +618,7 @@ def sync_offline_payments(
     transacciones: list[schemas.OfflinePaymentSyncItem],
     db: DbSession,
 ) -> schemas.OfflinePaymentSyncResponse:
+    raise HTTPException(status_code=410, detail="Sincronizacion heredada retirada; use /api/v3/offline-payments/sync")
     if not transacciones:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

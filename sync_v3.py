@@ -16,7 +16,7 @@ from clock import utc_now
 from issuer_keys import IssuerIdentity
 from protocol_v3 import (
     MessageType, ProtocolError, parse_signed_envelope, validate_ack_binding,
-    validate_receipt_binding, verify_authorization, verify_pos_signer,
+    payload_digest, validate_receipt_binding, verify_authorization, verify_pos_signer,
 )
 
 
@@ -42,12 +42,31 @@ def process_evidence_v3(db: Session, user: models.User,
                 return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "ACK_MISMATCH")
             _authorize(db, user, existing.wallet_id, existing.terminal_id)
             if existing.state in {"ACCEPTED", "REJECTED"}:
-                return _result(operation_id, "VALIDATED", existing.state, True, existing.rejection_code)
+                resolution = db.get(models.PaymentResolution, operation_id)
+                if resolution is None:
+                    return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
+                                   "SIGNED_RESOLUTION_MISSING")
+                return _result(operation_id, "VALIDATED", existing.state, True,
+                               existing.rejection_code, resolution.resolution_envelope)
 
         wallet, merchant_wallet, terminal, authorization, commitment = _validate(
             db, request, grant, grant_wire, receipt, ack_wire
         )
         _authorize(db, user, wallet.id, terminal.id)
+        if commitment.closed and existing is None:
+            wallet.offline_review_required = True
+            db.add(models.OfflinePaymentV2(
+                operation_id=operation_id, wallet_id=wallet.id,
+                merchant_id=request.payload["merchant_id"], terminal_id=terminal.id,
+                authorization_id=authorization.id, amount_cents=request.payload["amount_cents"],
+                currency=request.payload["currency"], nonce=request.payload["nonce"],
+                request_envelope=request_wire, receipt_envelope=receipt_wire,
+                ack_envelope=ack_wire, state="PENDING_REVIEW",
+                rejection_code="EVIDENCE_OMITTED_FROM_CLOSURE",
+            ))
+            db.commit()
+            return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
+                           "EVIDENCE_OMITTED_FROM_CLOSURE")
         payment = existing
         if payment is None:
             payment = models.OfflinePaymentV2(
@@ -170,8 +189,31 @@ def _apply(db, payment, wallet, merchant_wallet, authorization, commitment, issu
     ])
     payment.state = "ACCEPTED"
     payment.applied_at = utc_now()
+    issuer = IssuerIdentity.load_external(
+        os.environ["ISSUER_KEY_PATH"], os.environ["ISSUER_KEY_FINGERPRINT"]
+    )
+    grant = parse_signed_envelope(commitment.authorization_envelope)
+    request = parse_signed_envelope(payment.request_envelope)
+    receipt = parse_signed_envelope(payment.receipt_envelope)
+    resolution_wire = issuer.sign_envelope({
+        "version": 3, "type": "payment_resolution",
+        "operation_id": payment.operation_id, "wallet_id": payment.wallet_id,
+        "merchant_id": payment.merchant_id, "terminal_id": payment.terminal_id,
+        "amount_cents": amount, "currency": payment.currency,
+        "offline_authorization_id": payment.authorization_id,
+        "authorization_digest": payload_digest(grant),
+        "request_digest": payload_digest(request), "receipt_digest": payload_digest(receipt),
+        "operation_status": "ACCEPTED", "code": "ACCEPTED", "resolution_revision": 1,
+        "resolved_at": payment.applied_at.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "issuer_key_id": issuer.key_id, "issuer_key_fingerprint": issuer.fingerprint,
+    })
+    db.add(models.PaymentResolution(
+        operation_id=payment.operation_id, status="ACCEPTED",
+        resolution_envelope=resolution_wire, revision=1,
+    ))
     db.commit()
-    return _result(payment.operation_id, "VALIDATED", "ACCEPTED", True)
+    return _result(payment.operation_id, "VALIDATED", "ACCEPTED", True,
+                   resolution=resolution_wire)
 
 
 def _authorize(db, user, wallet_id, terminal_id):
@@ -188,8 +230,11 @@ def _wire(value: str) -> bytes:
     return data
 
 
-def _result(operation_id, submission, operation, final, code=None):
+def _result(operation_id, submission, operation, final, code=None, resolution=None):
     return schemas.OfflinePaymentResultV3(
         operation_id=operation_id, submission_status=submission,
         operation_status=operation, final=final, code=code,
+        resolution_envelope_b64=(
+            base64.b64encode(resolution).decode("ascii") if resolution is not None else None
+        ),
     )

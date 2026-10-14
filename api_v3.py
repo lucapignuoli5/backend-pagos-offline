@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Annotated
 from uuid import uuid4
 
@@ -26,6 +27,54 @@ DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[models.User, Depends(get_current_user)]
 
 
+@router.post("/simulated-topups", response_model=schemas.SimulatedTopupResponse)
+def simulated_topup_v3(
+    request: schemas.SimulatedTopupRequest,
+    db: DbSession,
+    user: Annotated[models.User, Depends(require_role("cliente"))],
+):
+    wallet = db.get(models.Wallet, request.wallet_id)
+    if wallet is None or wallet.user_id != user.id:
+        raise HTTPException(403, "Billetera no autorizada")
+    existing = db.get(models.SimulatedTopup, request.request_id)
+    if existing is not None:
+        if (existing.wallet_id != request.wallet_id
+                or existing.user_id != user.id
+                or existing.amount_cents != request.amount_cents):
+            raise HTTPException(409, "request_id reutilizado con otro contenido")
+        db.refresh(wallet)
+        return schemas.SimulatedTopupResponse(
+            request_id=existing.request_id, wallet_id=existing.wallet_id,
+            amount_cents=existing.amount_cents,
+            confirmed_balance_cents=wallet.confirmed_balance_cents,
+        )
+    db.add(models.SimulatedTopup(
+        request_id=request.request_id, wallet_id=wallet.id,
+        user_id=user.id, amount_cents=request.amount_cents,
+    ))
+    db.execute(update(models.Wallet).where(models.Wallet.id == wallet.id).values(
+        confirmed_balance_cents=models.Wallet.confirmed_balance_cents + request.amount_cents
+    ))
+    db.execute(update(models.User).where(models.User.id == user.id).values(
+        saldo_real=models.User.saldo_real + Decimal(request.amount_cents) / Decimal("100")
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.get(models.SimulatedTopup, request.request_id)
+        if (existing is None or existing.wallet_id != request.wallet_id
+                or existing.user_id != user.id
+                or existing.amount_cents != request.amount_cents):
+            raise HTTPException(409, "Recarga simulada conflictiva") from exc
+    db.refresh(wallet)
+    return schemas.SimulatedTopupResponse(
+        request_id=request.request_id, wallet_id=wallet.id,
+        amount_cents=request.amount_cents,
+        confirmed_balance_cents=wallet.confirmed_balance_cents,
+    )
+
+
 @router.post("/offline-authorizations", response_model=schemas.OfflineAuthorizationV3Response)
 def issue_authorization_v3(
     request: schemas.OfflineAuthorizationV3Request,
@@ -38,6 +87,13 @@ def issue_authorization_v3(
     key = db.get(models.RegisteredKey, request.wallet_key_id)
     if wallet is None or wallet.user_id != user.id or key is None or key.revoked or key.wallet_id != wallet.id:
         raise HTTPException(403, "Billetera o clave no autorizada")
+    if wallet.offline_review_required:
+        raise HTTPException(409, "La billetera requiere revision contable")
+    previous = db.query(models.OfflineAuthorization).filter_by(
+        issuance_request_id=request.request_id
+    ).one_or_none()
+    if previous is not None:
+        return _repeat_authorization(db, previous, request)
     issuer_path = os.getenv("ISSUER_KEY_PATH")
     issuer_pin = os.getenv("ISSUER_KEY_FINGERPRINT")
     if not issuer_path or not issuer_pin:
@@ -73,12 +129,22 @@ def issue_authorization_v3(
         "issuer_key_id": issuer.key_id, "issuer_key_fingerprint": issuer.fingerprint,
     }
     signed = issuer.sign_envelope(payload)
-    db.add(models.OfflineAuthorization(id=auth_id, wallet_id=wallet.id, wallet_key_id=key.key_id,
+    db.add(models.OfflineAuthorization(id=auth_id, issuance_request_id=request.request_id,
+        wallet_id=wallet.id, wallet_key_id=key.key_id,
         max_payment_cents=request.max_payment_cents, remaining_amount_cents=total,
         remaining_payments=request.max_payments, issued_at=now, expires_at=expires, active=True))
     db.add(models.OfflineCommitment(authorization_id=auth_id, wallet_id=wallet.id, reserved_cents=total,
         authorization_envelope=signed))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        previous = db.query(models.OfflineAuthorization).filter_by(
+            issuance_request_id=request.request_id
+        ).one_or_none()
+        if previous is None:
+            raise HTTPException(409, "No se pudo emitir la autorizacion") from exc
+        return _repeat_authorization(db, previous, request)
     return schemas.OfflineAuthorizationV3Response(authorization_id=auth_id, wallet_id=wallet.id,
         authorized_total_cents=total, authorization_envelope_b64=base64.b64encode(signed).decode("ascii"),
         issued_at=now, spend_expires_at=expires)
@@ -137,10 +203,21 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
     except Exception as exc:
         db.rollback()
         raise HTTPException(422, "Cierre invalido") from exc
-    commitment.closed = True
-    commitment.closure_id = close.payload["closure_id"]
+    closed = db.execute(update(models.OfflineCommitment).where(
+        models.OfflineCommitment.authorization_id == authorization_id,
+        models.OfflineCommitment.closed.is_(False),
+    ).values(closed=True, closure_id=close.payload["closure_id"]))
+    if closed.rowcount != 1:
+        db.rollback()
+        current = db.get(models.OfflineCommitment, authorization_id)
+        if current is not None and current.closed and current.closure_id == close.payload["closure_id"]:
+            return current
+        raise HTTPException(409, "Autorizacion cerrada concurrentemente con otra evidencia")
+    db.execute(update(models.OfflineAuthorization).where(
+        models.OfflineAuthorization.id == authorization_id
+    ).values(active=False))
     db.commit()
-    return commitment
+    return db.get(models.OfflineCommitment, authorization_id)
 
 
 @router.post("/offline-payments/sync", response_model=schemas.OfflinePaymentSyncV3Response)
@@ -153,10 +230,25 @@ def sync_v3(request: schemas.OfflinePaymentSyncV3Request, db: DbSession, user: C
 @router.post("/offline-payments/{operation_id}/resolution")
 def store_resolution_v3(operation_id: str, request: schemas.PaymentResolutionRequest,
                         db: DbSession, user: CurrentUser):
+    payment = db.get(models.OfflinePaymentV2, operation_id)
+    if payment is None:
+        raise HTTPException(404, "Operacion no encontrada")
+    _authorize_payment_participant(db, user, payment)
     try:
         envelope_bytes = base64.b64decode(request.resolution_envelope_b64, validate=True)
         envelope = parse_signed_envelope(envelope_bytes)
-        if envelope.payload.get("operation_id") != operation_id or envelope.payload.get("operation_status") not in {"ACCEPTED", "REJECTED"}:
+        receipt = parse_signed_envelope(payment.receipt_envelope)
+        request_envelope = parse_signed_envelope(payment.request_envelope)
+        commitment = db.get(models.OfflineCommitment, payment.authorization_id)
+        grant = parse_signed_envelope(commitment.authorization_envelope if commitment else b"")
+        if (envelope.payload.get("operation_id") != operation_id
+                or envelope.payload.get("operation_status") != payment.state
+                or envelope.payload.get("wallet_id") != payment.wallet_id
+                or envelope.payload.get("terminal_id") != payment.terminal_id
+                or envelope.payload.get("amount_cents") != payment.amount_cents
+                or envelope.payload.get("request_digest") != payload_digest(request_envelope)
+                or envelope.payload.get("receipt_digest") != payload_digest(receipt)
+                or envelope.payload.get("authorization_digest") != payload_digest(grant)):
             raise ValueError("resolution")
         issuer = IssuerIdentity.load_external(os.environ["ISSUER_KEY_PATH"], os.environ["ISSUER_KEY_FINGERPRINT"])
         if not envelope.verify(issuer.public_key_b64):
@@ -180,3 +272,54 @@ def store_resolution_v3(operation_id: str, request: schemas.PaymentResolutionReq
             raise HTTPException(409, "Resolucion conflictiva")
         return {"operation_id": operation_id, "status": existing.status, "final": True, "revision": existing.revision}
     return {"operation_id": operation_id, "status": record.status, "final": True, "revision": record.revision}
+
+
+@router.get("/offline-payments/{operation_id}", response_model=schemas.OfflinePaymentResultV3)
+def get_payment_v3(operation_id: str, db: DbSession, user: CurrentUser):
+    payment = db.get(models.OfflinePaymentV2, operation_id)
+    if payment is None:
+        raise HTTPException(404, "Operacion no encontrada")
+    _authorize_payment_participant(db, user, payment)
+    resolution = db.get(models.PaymentResolution, operation_id)
+    final = payment.state in {"ACCEPTED", "REJECTED"} and resolution is not None
+    operation_status = payment.state if payment.state in {
+        "ACCEPTED", "REJECTED", "PENDING_EVIDENCE", "PENDING_REVIEW"
+    } else "UNRESOLVED"
+    return schemas.OfflinePaymentResultV3(
+        operation_id=operation_id, submission_status="VALIDATED",
+        operation_status=operation_status, final=final, code=payment.rejection_code,
+        resolution_envelope_b64=(
+            base64.b64encode(resolution.resolution_envelope).decode("ascii") if resolution else None
+        ),
+    )
+
+
+def _authorize_payment_participant(db: Session, user: models.User,
+                                   payment: models.OfflinePaymentV2) -> None:
+    wallet = db.get(models.Wallet, payment.wallet_id)
+    terminal = db.get(models.Terminal, payment.terminal_id)
+    if not ((wallet and wallet.user_id == user.id)
+            or (terminal and terminal.merchant_user_id == user.id)):
+        raise HTTPException(403, "Operacion no autorizada")
+
+
+def _repeat_authorization(db: Session, previous: models.OfflineAuthorization,
+                          request: schemas.OfflineAuthorizationV3Request):
+    commitment = db.get(models.OfflineCommitment, previous.id)
+    same = (
+        previous.wallet_id == request.wallet_id
+        and previous.wallet_key_id == request.wallet_key_id
+        and previous.max_payment_cents == request.max_payment_cents
+        and previous.remaining_payments <= request.max_payments
+        and commitment is not None
+        and commitment.reserved_cents == request.max_payment_cents * request.max_payments
+        and commitment.authorization_envelope is not None
+    )
+    if not same:
+        raise HTTPException(409, "request_id reutilizado con otro contenido")
+    return schemas.OfflineAuthorizationV3Response(
+        authorization_id=previous.id, wallet_id=previous.wallet_id,
+        authorized_total_cents=commitment.reserved_cents,
+        authorization_envelope_b64=base64.b64encode(commitment.authorization_envelope).decode("ascii"),
+        issued_at=previous.issued_at, spend_expires_at=previous.expires_at,
+    )

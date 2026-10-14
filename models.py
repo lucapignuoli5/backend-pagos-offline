@@ -105,6 +105,30 @@ class ExternalPaymentEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class ExternalTopupOrder(Base):
+    __tablename__ = "external_topup_orders"
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="ck_external_topup_order_positive"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ARS")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="PENDING")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SimulatedTopup(Base):
+    __tablename__ = "simulated_topups"
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="ck_simulated_topup_positive"),)
+
+    request_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Wallet(Base):
     __tablename__ = "wallets"
     __table_args__ = (
@@ -115,6 +139,7 @@ class Wallet(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False, index=True)
     confirmed_balance_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ARS", server_default="ARS")
+    offline_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
 
 
 class Terminal(Base):
@@ -154,6 +179,7 @@ class OfflineAuthorization(Base):
     )
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    issuance_request_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
     wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
     wallet_key_id: Mapped[str] = mapped_column(ForeignKey("registered_keys.key_id"), nullable=False, index=True)
     max_payment_cents: Mapped[int] = mapped_column(Integer, nullable=False)
