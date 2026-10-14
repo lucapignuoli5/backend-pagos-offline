@@ -190,6 +190,11 @@ def _validate_evidence(db: Session, request, receipt, ack_wire: bytes | None) ->
         raise ValueError("authorization")
     if db.get(models.OfflineCommitment, authorization.id) is not None:
         raise ValueError("v3 authorization cannot be used by v2")
+    inventory = db.get(models.LegacyEvidenceInventory, request.payload["operation_id"])
+    if (inventory is None or inventory.wallet_id != wallet.id
+            or inventory.authorization_id != authorization.id
+            or inventory.receipt_digest != payload_digest(receipt.payload)):
+        raise ValueError("legacy evidence not inventoried")
     issued_at = _parse_timestamp(request.payload["issued_at"])
     expires_at = _parse_timestamp(request.payload["expires_at"])
     auth_issued = _as_utc(authorization.issued_at)

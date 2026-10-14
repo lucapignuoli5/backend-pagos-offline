@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, update
@@ -20,11 +20,55 @@ from database import get_db
 from issuer_keys import IssuerIdentity
 from protocol_v3 import parse_signed_envelope, payload_digest, validate_close_manifest, verify_authorization
 from sync_v3 import process_evidence_v3
-from settings import MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
+from settings import LEGACY_INVENTORY_OPEN, MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
 router = APIRouter(prefix="/api/v3")
 DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[models.User, Depends(get_current_user)]
+
+
+@router.post("/legacy-inventory")
+def register_legacy_inventory(
+    request: schemas.LegacyInventoryRequest,
+    db: DbSession,
+    user: Annotated[models.User, Depends(require_role("cliente"))],
+):
+    if not LEGACY_INVENTORY_OPEN:
+        raise HTTPException(403, "Ventana de inventario historico cerrada")
+    wallet = db.get(models.Wallet, request.wallet_id)
+    if wallet is None or wallet.user_id != user.id:
+        raise HTTPException(403, "Billetera no autorizada")
+    imported = 0
+    for entry in request.operations:
+        try:
+            parsed_operation_id = UUID(entry.operation_id)
+            if parsed_operation_id.version != 4 or str(parsed_operation_id) != entry.operation_id:
+                raise ValueError("uuid")
+        except ValueError as exc:
+            raise HTTPException(422, "operation_id historico invalido") from exc
+        authorization = db.get(models.OfflineAuthorization, entry.authorization_id)
+        if (authorization is None or authorization.wallet_id != wallet.id
+                or db.get(models.OfflineCommitment, authorization.id) is not None):
+            raise HTTPException(409, "Autorizacion historica incompatible")
+        existing = db.get(models.LegacyEvidenceInventory, entry.operation_id)
+        if existing is not None:
+            if (existing.wallet_id != wallet.id
+                    or existing.authorization_id != entry.authorization_id
+                    or existing.receipt_digest != entry.receipt_digest):
+                raise HTTPException(409, "Inventario historico conflictivo")
+            continue
+        db.add(models.LegacyEvidenceInventory(
+            operation_id=entry.operation_id, wallet_id=wallet.id,
+            authorization_id=entry.authorization_id,
+            receipt_digest=entry.receipt_digest,
+        ))
+        imported += 1
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Inventario historico concurrente") from exc
+    return {"wallet_id": wallet.id, "imported": imported, "total": len(request.operations)}
 
 
 @router.post("/simulated-topups", response_model=schemas.SimulatedTopupResponse)

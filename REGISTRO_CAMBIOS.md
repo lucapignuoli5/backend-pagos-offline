@@ -556,3 +556,18 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** el inventario y la conciliación de evidencia histórica real requieren una migración operativa sobre copias controladas antes de habilitar producción.
 - **Commit:** `fix(compat): [TFG-C2-BE-07] limitar v2 a evidencia historica`
 - **Impacto académico:** evita que un cliente nuevo degrade una autorización v3 al contrato heredado.
+
+## TFG-C2-BE-08 — Inventariar evidencia histórica v2
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Requisito:** permitir conciliación v2 únicamente para evidencia histórica conocida antes de habilitar v3.
+- **Anterior:** cualquier evidencia v2 compatible con una autorización heredada podía intentar conciliación, sin un inventario previo por cuenta.
+- **Nuevo:** una ventana administrativa deshabilitada por defecto permite que el cliente autenticado registre UUID, autorización y digest de sus comprobantes heredados; la conciliación v2 exige una coincidencia exacta y rechaza autorizaciones con compromiso v3.
+- **Archivos:** `.env.example`, `settings.py`, `models.py`, `migrations.py`, `schemas.py`, `api_v3.py`, `sync_v2.py` y `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** tabla aditiva `legacy_evidence_inventory`; ruta autenticada `/api/v3/legacy-inventory`; variable `LEGACY_INVENTORY_OPEN=false`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** la apertura de la ventana y la migración deben hacerse sobre copias controladas; evidencia ausente o contradictoria requiere revisión y no se concilia automáticamente.
+- **Commit:** `feat(compat): [TFG-C2-BE-08] inventariar evidencia v2`
+- **Impacto académico:** hace explícito el límite entre recuperación histórica v2 y pagos nuevos v3.

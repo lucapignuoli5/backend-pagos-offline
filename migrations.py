@@ -43,6 +43,20 @@ def run_schema_migrations(engine: Engine) -> None:
         connection.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_external_topup_orders_user_id ON external_topup_orders(user_id)"
         ))
+        connection.execute(text(
+            "CREATE TABLE IF NOT EXISTS legacy_evidence_inventory ("
+            "operation_id VARCHAR(36) NOT NULL PRIMARY KEY, wallet_id VARCHAR(120) NOT NULL, "
+            "authorization_id VARCHAR(120) NOT NULL, receipt_digest VARCHAR(64) NOT NULL, "
+            "imported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "FOREIGN KEY(wallet_id) REFERENCES wallets(id), "
+            "FOREIGN KEY(authorization_id) REFERENCES offline_authorizations(id))"
+        ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_legacy_inventory_wallet_id ON legacy_evidence_inventory(wallet_id)"
+        ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_legacy_inventory_authorization_id ON legacy_evidence_inventory(authorization_id)"
+        ))
     user_columns = {column["name"] for column in inspector.get_columns("users")}
     if "role" not in user_columns:
         with engine.begin() as connection:

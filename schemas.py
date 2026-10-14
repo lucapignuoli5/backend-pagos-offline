@@ -258,3 +258,14 @@ class SimulatedTopupResponse(BaseModel):
     wallet_id: str
     amount_cents: int
     confirmed_balance_cents: int
+
+
+class LegacyInventoryEntry(BaseModel):
+    operation_id: str = Field(..., min_length=36, max_length=36)
+    authorization_id: str = Field(..., min_length=1, max_length=120)
+    receipt_digest: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+
+
+class LegacyInventoryRequest(BaseModel):
+    wallet_id: str = Field(..., min_length=1, max_length=120)
+    operations: list[LegacyInventoryEntry] = Field(..., min_length=1, max_length=100)

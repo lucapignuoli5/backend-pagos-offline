@@ -129,6 +129,16 @@ class SimulatedTopup(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class LegacyEvidenceInventory(Base):
+    __tablename__ = "legacy_evidence_inventory"
+
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), nullable=False, index=True)
+    receipt_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Wallet(Base):
     __tablename__ = "wallets"
     __table_args__ = (
