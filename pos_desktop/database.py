@@ -41,7 +41,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -94,6 +94,66 @@ class PosDatabase:
                     COMMIT;
                     """
                 )
+                version = 2
+            if version == 2:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    CREATE TABLE pos_profile (
+                        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                        user_id INTEGER NOT NULL,
+                        merchant_id TEXT NOT NULL,
+                        terminal_id TEXT NOT NULL,
+                        key_id TEXT NOT NULL,
+                        provisioned_at TEXT NOT NULL
+                    );
+                    CREATE TABLE sync_lock (
+                        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                        owner TEXT NOT NULL,
+                        expires_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version=3;
+                    COMMIT;
+                    """
+                )
+
+    def save_profile(
+        self, user_id: int, merchant_id: str, terminal_id: str, key_id: str, provisioned_at: str,
+    ) -> None:
+        if not merchant_id or not terminal_id or not key_id:
+            raise ValueError("Perfil POS incompleto")
+        with closing(self.connect()) as db:
+            db.execute(
+                """INSERT INTO pos_profile VALUES (1, ?, ?, ?, ?, ?)
+                   ON CONFLICT(singleton) DO UPDATE SET
+                     user_id=excluded.user_id, merchant_id=excluded.merchant_id,
+                     terminal_id=excluded.terminal_id, key_id=excluded.key_id,
+                     provisioned_at=excluded.provisioned_at""",
+                (user_id, merchant_id, terminal_id, key_id, provisioned_at),
+            )
+
+    def get_profile(self) -> sqlite3.Row | None:
+        with closing(self.connect()) as db:
+            return db.execute("SELECT * FROM pos_profile WHERE singleton=1").fetchone()
+
+    def try_acquire_sync_lock(self, owner: str, now: str, expires_at: str) -> bool:
+        with closing(self.connect()) as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT owner, expires_at FROM sync_lock WHERE singleton=1").fetchone()
+            if row is not None and row["owner"] != owner and row["expires_at"] > now:
+                db.rollback()
+                return False
+            db.execute(
+                """INSERT INTO sync_lock VALUES (1, ?, ?)
+                   ON CONFLICT(singleton) DO UPDATE SET owner=excluded.owner, expires_at=excluded.expires_at""",
+                (owner, expires_at),
+            )
+            db.commit()
+            return True
+
+    def release_sync_lock(self, owner: str) -> None:
+        with closing(self.connect()) as db:
+            db.execute("DELETE FROM sync_lock WHERE singleton=1 AND owner=?", (owner,))
 
     def save_identity(
         self, key_id: str, public_key_b64: str, fingerprint: str,

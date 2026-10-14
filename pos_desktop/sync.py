@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
@@ -21,46 +22,54 @@ class PosSyncService:
         self.database = database
         self.backend = backend
         self.now = now
+        self.owner = str(uuid.uuid4())
 
     def sync_due(self, access_token: str, limit: int = 100) -> dict[str, int]:
         instant = self.now().astimezone(timezone.utc).replace(microsecond=0)
-        candidates = self.database.list_sync_candidates(self._timestamp(instant), limit)
-        if not candidates:
-            return {}
-        evidence = [self._evidence(operation) for operation in candidates]
         try:
-            raw_results = self.backend.sync_operations(access_token, evidence)
-        except Exception:
+            if not self.database.try_acquire_sync_lock(
+                self.owner, self._timestamp(instant), self._timestamp(instant + timedelta(minutes=5))
+            ):
+                return {"BUSY": 1}
+            candidates = self.database.list_sync_candidates(self._timestamp(instant), limit)
+            if not candidates:
+                return {}
+            evidence = [self._evidence(operation) for operation in candidates]
+            try:
+                raw_results = self.backend.sync_operations(access_token, evidence)
+            except Exception:
+                for operation in candidates:
+                    self._retry(operation, "NETWORK_ERROR", instant)
+                raise
+
+            by_id: dict[str, dict] = {}
+            candidate_ids = {item.operation_id for item in candidates}
+            for result in raw_results:
+                operation_id = result.get("operation_id")
+                status = result.get("status")
+                if operation_id not in candidate_ids or operation_id in by_id or status not in self.VALID_RESULTS:
+                    continue
+                by_id[operation_id] = result
+
+            summary: dict[str, int] = {}
             for operation in candidates:
-                self._retry(operation, "NETWORK_ERROR", instant)
-            raise
-
-        by_id: dict[str, dict] = {}
-        candidate_ids = {item.operation_id for item in candidates}
-        for result in raw_results:
-            operation_id = result.get("operation_id")
-            status = result.get("status")
-            if operation_id not in candidate_ids or operation_id in by_id or status not in self.VALID_RESULTS:
-                continue
-            by_id[operation_id] = result
-
-        summary: dict[str, int] = {}
-        for operation in candidates:
-            result = by_id.get(operation.operation_id)
-            if result is None:
-                self._retry(operation, "MISSING_RESULT", instant)
-                summary["RETRYABLE_ERROR"] = summary.get("RETRYABLE_ERROR", 0) + 1
-                continue
-            status = result["status"]
-            code = result.get("code")
-            next_at = None
-            if status in {"PENDING_EVIDENCE", "RETRYABLE_ERROR"}:
-                next_at = self._timestamp(instant + self._backoff(operation.sync_attempts + 1))
-            self.database.apply_sync_result(
-                operation.operation_id, status, code, self._timestamp(instant), next_at
-            )
-            summary[status] = summary.get(status, 0) + 1
-        return summary
+                result = by_id.get(operation.operation_id)
+                if result is None:
+                    self._retry(operation, "MISSING_RESULT", instant)
+                    summary["RETRYABLE_ERROR"] = summary.get("RETRYABLE_ERROR", 0) + 1
+                    continue
+                status = result["status"]
+                code = result.get("code")
+                next_at = None
+                if status in {"PENDING_EVIDENCE", "RETRYABLE_ERROR"}:
+                    next_at = self._timestamp(instant + self._backoff(operation.sync_attempts + 1))
+                self.database.apply_sync_result(
+                    operation.operation_id, status, code, self._timestamp(instant), next_at
+                )
+                summary[status] = summary.get(status, 0) + 1
+            return summary
+        finally:
+            self.database.release_sync_lock(self.owner)
 
     @staticmethod
     def _evidence(operation: PosOperation) -> dict:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from dataclasses import replace
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide6.QtWidgets import (
@@ -40,11 +41,13 @@ class PosWindow(QMainWindow):
     def __init__(
         self, service: PosService, backend: PosBackendClient,
         simulator: AndroidHceSimulator | None = None,
+        offline_enabled: bool = False,
     ):
         super().__init__()
         self.service = service
         self.backend = backend
         self.simulator = simulator
+        self.offline_enabled = offline_enabled
         self.pool = QThreadPool.globalInstance()
         self.operation_id: str | None = None
         self.access_token: str | None = None
@@ -74,6 +77,10 @@ class PosWindow(QMainWindow):
         layout.addRow(button)
         if self.simulator is not None:
             local = QPushButton("Entrar en simulador local")
+            local.clicked.connect(lambda: self.stack.setCurrentWidget(self.amount_page))
+            layout.addRow(local)
+        elif self.offline_enabled:
+            local = QPushButton("Abrir POS sin conexión")
             local.clicked.connect(lambda: self.stack.setCurrentWidget(self.amount_page))
             layout.addRow(local)
         layout.addRow(self.access_status)
@@ -125,6 +132,9 @@ class PosWindow(QMainWindow):
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Operación", "Importe", "Estado", "Actualizada"])
         layout.addWidget(self.table)
+        resume = QPushButton("Reanudar operación seleccionada")
+        resume.clicked.connect(self._resume_selected)
+        layout.addWidget(resume)
         back = QPushButton("Volver")
         back.clicked.connect(lambda: self.stack.setCurrentWidget(self.amount_page))
         layout.addWidget(back)
@@ -137,6 +147,14 @@ class PosWindow(QMainWindow):
             return
         def success(session):
             self.access_token = session.access_token
+            if session.merchant_id and session.terminal_id and session.key_id:
+                self.service.config = replace(
+                    self.service.config,
+                    merchant_id=session.merchant_id,
+                    terminal_id=session.terminal_id,
+                    pos_key_id=session.key_id,
+                )
+                self.offline_enabled = True
             self.stack.setCurrentWidget(self.amount_page)
 
         self._run(lambda: self.backend.login_and_register_key(username, password), success, self.access_status)
@@ -206,6 +224,27 @@ class PosWindow(QMainWindow):
             for column, value in enumerate(values):
                 self.table.setItem(row, column, QTableWidgetItem(value))
         self.stack.setCurrentWidget(self.history_page)
+
+    def _resume_selected(self) -> None:
+        row = self.table.currentRow()
+        item = self.table.item(row, 0) if row >= 0 else None
+        if item is None:
+            self.sync_status.setText("Seleccione una operación")
+            return
+        self.operation_id = item.text()
+        operation = self.service.database.get_operation(self.operation_id)
+        if operation is None:
+            self.sync_status.setText("La operación ya no está disponible")
+            return
+        if operation.state == "REQUEST_CREATED":
+            self.wait_status.setText("Solicitud recuperada; acerque el teléfono para enviarla")
+        elif operation.state in {"REQUEST_DELIVERED", "WAITING_CONFIRMATION"}:
+            self.wait_status.setText("Solicitud recuperada; complete el segundo acercamiento")
+        elif operation.state == "LOCALLY_ACCEPTED" and operation.ack_envelope is not None:
+            self.wait_status.setText("Aceptación recuperada; acerque el teléfono para reenviar el acuse")
+        else:
+            self.wait_status.setText(f"Operación recuperada en estado {operation.state}")
+        self.stack.setCurrentWidget(self.wait_page)
 
     def _run(self, action, on_success, status: QLabel) -> None:
         status.setText("Procesando…")

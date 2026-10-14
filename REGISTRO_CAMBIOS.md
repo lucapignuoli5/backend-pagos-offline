@@ -461,3 +461,14 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 
 ## Decisión de proceso vigente
 Las fases pueden cerrarse por implementación y revisión estática sin ejecutar pruebas al finalizar. El estado debe indicar `VALIDACIÓN PENDIENTE`; no se declara `COMPROBADO` ni se atribuyen resultados experimentales hasta ejecutar las verificaciones correspondientes.
+
+## TFG-C4-POS-01 — Perfil recuperable, migración 2→3 y conciliación exclusiva
+
+- **Fecha:** 2026-10-14
+- **Fase:** C4
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** el POS migra antes de leer identidad, conserva el perfil devuelto por el backend, puede abrir offline después del aprovisionamiento, permite reanudar operaciones desde historial y usa un lease SQLite para impedir dos conciliadores simultáneos. El backend devuelve el comercio asociado al terminal. Se fijan PySide6 6.12.0 y `pyscard` 2.3.1 para CPython anterior a 3.14.
+- **Archivos:** `schemas.py`, `api_v2.py`, `pos_desktop/database.py`, `app.py`, `backend_client.py`, `ui.py`, `sync.py`, `requirements-pos.txt`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** DPAPI, Qt, PC/SC y ACR122U quedan con validación pendiente; el entorno Python 3.14 actual no instala `pyscard`.
+- **Commit:** `feat(pos): [TFG-C4-POS-01] completar recuperacion y perfil offline`

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from PySide6.QtWidgets import QApplication
 
@@ -17,6 +18,15 @@ from pos_desktop.ui import PosWindow
 def main() -> int:
     config = PosConfig.from_environment()
     database = PosDatabase(config.database_path)
+    database.migrate()
+    profile = database.get_profile()
+    if profile is not None:
+        config = replace(
+            config,
+            merchant_id=profile["merchant_id"],
+            terminal_id=profile["terminal_id"],
+            pos_key_id=profile["key_id"],
+        )
     key_store = PosKeyStore(database, WindowsDpapiProtector())
     simulator = AndroidHceSimulator() if config.simulator else None
     if simulator is not None:
@@ -34,7 +44,7 @@ def main() -> int:
     service = PosService(config, database, key_store, transport_factory)
     backend = PosBackendClient(config, key_store)
     application = QApplication(sys.argv)
-    window = PosWindow(service, backend, simulator)
+    window = PosWindow(service, backend, simulator, offline_enabled=profile is not None)
     window.show()
     return application.exec()
 

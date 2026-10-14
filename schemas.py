@@ -128,6 +128,7 @@ class KeyRegistrationResponse(BaseModel):
     purpose: Literal["wallet", "pos"]
     scope_id: str
     created: bool
+    merchant_id: Optional[str] = None
 
 
 class TrustedKeyResponse(BaseModel):

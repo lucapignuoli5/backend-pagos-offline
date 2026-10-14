@@ -17,6 +17,9 @@ from pos_desktop.key_store import PosKeyStore
 class BackendSession:
     access_token: str
     user_id: int
+    merchant_id: str | None = None
+    terminal_id: str | None = None
+    key_id: str | None = None
 
 
 class PosBackendClient:
@@ -59,12 +62,25 @@ class PosBackendClient:
             or registered.get("purpose") != "pos"
         ):
             raise RuntimeError("El backend devolvio una identidad POS incompatible")
+        merchant_id = registered.get("merchant_id")
+        if not isinstance(merchant_id, str) or not merchant_id:
+            raise RuntimeError("El backend no devolvio el perfil comercial del terminal")
+        self.key_store.database.save_profile(
+            session.user_id,
+            merchant_id,
+            registered["scope_id"],
+            registered["key_id"],
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
         for wallet_key in self._get("/api/keys/trusted/wallet", session.access_token):
             self.key_store.database.trust_wallet_key(
                 wallet_key["key_id"], wallet_key["fingerprint"],
                 wallet_key["scope_id"], wallet_key["public_key_b64"]
             )
-        return session
+        return BackendSession(
+            session.access_token, session.user_id, merchant_id,
+            registered["scope_id"], registered["key_id"],
+        )
 
     def sync_operations(self, access_token: str, operations: list[dict]) -> list[dict]:
         response = self._request(

@@ -140,8 +140,10 @@ def register_key(
         )
         if not same:
             raise HTTPException(status_code=409, detail="key_id ya existe con otro contenido")
+        terminal = db.get(models.Terminal, scope_id) if purpose == "pos" else None
         return schemas.KeyRegistrationResponse(
-            key_id=key_id, fingerprint=fingerprint, purpose=purpose, scope_id=scope_id, created=False
+            key_id=key_id, fingerprint=fingerprint, purpose=purpose, scope_id=scope_id,
+            created=False, merchant_id=terminal.merchant_id if terminal else None,
         )
 
     db.add(
@@ -162,8 +164,10 @@ def register_key(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Clave, huella o nonce ya registrado") from exc
+    terminal = db.get(models.Terminal, scope_id) if purpose == "pos" else None
     return schemas.KeyRegistrationResponse(
-        key_id=key_id, fingerprint=fingerprint, purpose=purpose, scope_id=scope_id, created=True
+        key_id=key_id, fingerprint=fingerprint, purpose=purpose, scope_id=scope_id,
+        created=True, merchant_id=terminal.merchant_id if terminal else None,
     )
 
 
