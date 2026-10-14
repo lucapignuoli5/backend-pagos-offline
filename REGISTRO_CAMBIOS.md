@@ -611,3 +611,14 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivos: tools/run_demo.py, GUIA_PRUEBA_MANUAL.md, este registro y launcher/LEEME externos. El binario ngrok instalado se copió a la nueva carpeta sin modificar el original.
 - Estado demostrado: preparación de datos nueva y sintaxis de herramientas; funcionamiento en dispositivos pendiente.
 - Impacto académico: ejecución comprobada de preparación nueva, sin atribuir pagos ni conciliación comprobados; instrucciones y consolidado actualizados.
+## TFG-C8-BE-03 — Corregir lectura de identidad emisora desde entorno
+
+- Fecha: 2026-10-14. Estado: CORREGIDO / VALIDACIÓN MANUAL PENDIENTE.
+- Disparador real: usuario intenta login desde el APK demo; login/registro/balance responden 200 y emisión v3 responde 503 en backend.log.
+- Causa comprobada estáticamente: os.getenv devuelve str y _external invoca expanduser directamente sobre ese str.
+- Corrección implementada: normalizar Path en el límite de identidad; preservar archivo DPAPI, huella y configuración. Consumidores API, conciliación y confianza histórica comparten el mismo límite.
+- Verificación autorizada: sintaxis Python; sin solicitudes de pago ni suites.
+- Archivos: issuer_keys.py, AGENTS.md, este registro e informe/consolidado académico.
+- Verificación: AST correcto; sin importación de aplicación, suites ni solicitudes HTTP ejecutadas por el agente.
+- Despliegue: reiniciar la demostración para cargar el módulo corregido; APK y claves no se regeneran.
+- Commit: `fix(issuer): [TFG-C8-BE-03] aceptar rutas de configuracion externas`.

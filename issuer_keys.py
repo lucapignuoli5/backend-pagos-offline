@@ -13,8 +13,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from pos_desktop.key_store import SecretProtector, WindowsDpapiProtector
 
 
-def _external(path: Path) -> Path:
-    resolved = path.expanduser().resolve()
+def _external(path: Path | str) -> Path:
+    resolved = Path(path).expanduser().resolve()
     source = Path(__file__).resolve().parent
     if resolved.is_relative_to(source) or any((p / '.git').exists() for p in resolved.parents):
         raise ValueError('Issuer private identity must be outside Git repositories')
@@ -34,7 +34,7 @@ class IssuerIdentity:
         self.fingerprint = hashlib.sha256(public).hexdigest()
 
     @classmethod
-    def create_external(cls, path: Path, key_id: str, protector: SecretProtector | None = None) -> 'IssuerIdentity':
+    def create_external(cls, path: Path | str, key_id: str, protector: SecretProtector | None = None) -> 'IssuerIdentity':
         target = _external(path)
         identity = cls(key_id, ec.generate_private_key(ec.SECP256R1()))
         protector = protector or WindowsDpapiProtector()
@@ -50,7 +50,7 @@ class IssuerIdentity:
         return identity
 
     @classmethod
-    def load_external(cls, path: Path, expected_fingerprint: str, protector: SecretProtector | None = None) -> 'IssuerIdentity':
+    def load_external(cls, path: Path | str, expected_fingerprint: str, protector: SecretProtector | None = None) -> 'IssuerIdentity':
         target = _external(path)
         if not re.fullmatch(r'[0-9a-f]{64}', expected_fingerprint):
             raise ValueError('A trusted issuer fingerprint is required')

@@ -83,3 +83,9 @@ externa `C:\Users\anita\TFG-Demo-Manual`, con dominio fijo
 `unfailing-bless-thrift.ngrok-free.dev`. No recrear esa carpeta ni su identidad.
 El modo start del launcher abre backend propio oculto y túnel con token local;
 Enter detiene esos procesos. No se ejecutó start ni pagos durante esta preparación.
+
+El usuario ejecutó el launcher y su login llegó al backend; autorización v3
+respondió 503 porque la ruta emisora recibida del entorno era str y se usaba como
+Path. C8-BE-03 normaliza ambos tipos en issuer_keys._external. AST correcto;
+la ejecución posterior requiere reiniciar la demostración. No recrear claves,
+cuentas o bases como solución a ese error.
