@@ -517,3 +517,17 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** API, migraciones, concurrencia, rollback y simulador de webhook quedan para validación agrupada; no se contactó Mercado Pago.
 - **Commit:** `fix(accounting): [TFG-C2-BE-05] cerrar resoluciones y recargas v3`
 - **Impacto académico:** completa la programación de C2 sin atribuir atomicidad ni interoperabilidad comprobadas hasta ejecutar la matriz posterior.
+
+## TFG-C2-BE-06 — Cerrar bypasses de acceso y fallos transitorios externos
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Hallazgos:** R29 y R30.
+- **Anterior:** distintos alias del mismo usuario tenían contadores de login separados, y contraseñas heredadas largas podían aceptarse por truncamiento bcrypt. Una respuesta fallida del proveedor podía terminar como webhook ignorado.
+- **Nuevo:** el bloqueo combina IP e identidad resuelta para todos los alias, las contraseñas de más de 72 bytes usan únicamente el esquema SHA-256 previo a bcrypt y no aceptan el truncamiento histórico, y los fallos del proveedor se informan como reintentables mediante HTTP 502.
+- **Archivos:** `main.py`, `tools/provision_user.py` y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** usuarios heredados con hashes truncados requieren ejecutar intencionalmente la herramienta administrativa con la base elegida; rate limiting distribuido queda fuera del prototipo local.
+- **Commit:** `fix(auth): [TFG-C2-BE-06] cerrar aliases y fallos externos`
+- **Impacto académico:** evita presentar como resueltos los controles de acceso mediante comportamientos heredados ambiguos.

@@ -80,11 +80,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         raw = _normalize_password_for_bcrypt(plain_password)
         hashed = hashed_password.encode("ascii")
-        if bcrypt.checkpw(raw, hashed):
-            return True
-        if len(plain_password.encode("utf-8")) > 72:
-            return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hashed)
-        return False
+        return bcrypt.checkpw(raw, hashed)
     except (UnicodeError, ValueError):
         return False
 
@@ -182,8 +178,8 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         )
     identificador = (payload.usuario or payload.token_id or "").strip()
     client_ip = request.client.host if request.client else "unknown"
-    throttle_key = f"{client_ip}:{identificador.casefold()}"
-    LOGIN_THROTTLE.check(throttle_key)
+    ip_throttle_key = f"ip:{client_ip}"
+    LOGIN_THROTTLE.check(ip_throttle_key)
     usuario = None
 
     if identificador.isdigit():
@@ -210,6 +206,8 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
             .filter(func.lower(models.User.nombre) == identificador.lower())
             .first()
         )
+    identity_throttle_key = f"identity:{client_ip}:{usuario.id if usuario else identificador.casefold()}"
+    LOGIN_THROTTLE.check(identity_throttle_key)
 
     if usuario is None or not usuario.password_hash:
         raw_pwd = _normalize_password_for_bcrypt(payload.password)
@@ -219,10 +217,12 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         password_valid = verify_password(payload.password, usuario.password_hash)
 
     if not password_valid:
-        LOGIN_THROTTLE.fail(throttle_key)
+        LOGIN_THROTTLE.fail(ip_throttle_key)
+        LOGIN_THROTTLE.fail(identity_throttle_key)
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
-    LOGIN_THROTTLE.succeed(throttle_key)
+    LOGIN_THROTTLE.succeed(ip_throttle_key)
+    LOGIN_THROTTLE.succeed(identity_throttle_key)
     token, expires_in = create_access_token(usuario)
 
     return {
@@ -411,6 +411,8 @@ async def mp_webhook(request: Request, db: DbSession):
         payment_info = mp_sdk.payment().get(payment_identifier)
         if not isinstance(payment_info, dict):
             raise HTTPException(status_code=502, detail="Respuesta externa invalida")
+        if payment_info.get("status") != 200 or not isinstance(payment_info.get("response"), dict):
+            raise HTTPException(status_code=502, detail="Proveedor de pagos temporalmente no disponible")
 
         if payment_info.get("status") == 200 and isinstance(payment_info.get("response"), dict):
             payment = payment_info["response"]
