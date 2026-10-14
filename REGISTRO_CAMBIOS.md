@@ -458,3 +458,6 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitación:** el núcleo aún comparte reglas de persistencia con compatibilidad histórica; requiere pruebas HTTP y de concurrencia antes de declarar C2 comprobada.
 - **Commit:** `refactor(sync): [TFG-C2-BE-04] separar entrada de procesamiento v3`
 - **Impacto académico:** deja explícita la frontera de API v3 y evita que la ruta HTTP dependa directamente del adaptador v2.
+
+## Decisión de proceso vigente
+Las fases pueden cerrarse por implementación y revisión estática sin ejecutar pruebas al finalizar. El estado debe indicar `VALIDACIÓN PENDIENTE`; no se declara `COMPROBADO` ni se atribuyen resultados experimentales hasta ejecutar las verificaciones correspondientes.
