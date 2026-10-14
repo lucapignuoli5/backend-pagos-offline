@@ -599,3 +599,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Aclaración del equipo: conservar el dominio fijo ngrok anterior. El launcher admite `--domain` y reutiliza el hostname guardado; no se abrió túnel durante esta entrega.
 - Commit: `fix(manual): [TFG-C8-BE-01] preparar ejecucion controlada`.
 - Impacto académico: preparación reproducible para prueba manual; no acredita atomicidad, migración ni interoperabilidad.
+## TFG-C8-BE-02 — Demostración configurada para dos teléfonos
+
+- Fecha: 2026-10-14. Estado: PREPARADA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Requisito: dejar demostración nueva y launcher preparados con dominio fijo del equipo.
+- Preparación autorizada: base nueva externa, identidad DPAPI, cuentas demo y APK configurado. Sin pagos ni suites.
+- Datos históricos: conservar; no migrar bases originales.
+- Commit: `feat(demo): [TFG-C8-BE-02] configurar demostracion de dos telefonos`.
+- Datos creados: exclusivamente `C:\Users\anita\TFG-Demo-Manual`; base demo nueva, usuarios cliente/comercio, emisor DPAPI, inventario público y configuración DPAPI. El prepare_demo terminó correctamente; no se arrancó backend ni se emitieron pagos.
+- Dominio configurado: unfailing-bless-thrift.ngrok-free.dev; launcher reutiliza authtoken de configuración local sin imprimir ni registrar valores.
+- Archivos: tools/run_demo.py, GUIA_PRUEBA_MANUAL.md, este registro y launcher/LEEME externos. El binario ngrok instalado se copió a la nueva carpeta sin modificar el original.
+- Estado demostrado: preparación de datos nueva y sintaxis de herramientas; funcionamiento en dispositivos pendiente.
+- Impacto académico: ejecución comprobada de preparación nueva, sin atribuir pagos ni conciliación comprobados; instrucciones y consolidado actualizados.

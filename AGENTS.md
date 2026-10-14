@@ -77,3 +77,9 @@ La auditoría R01–R34 invalida el cierre integral previo. El contrato y las ru
 - POS migra 4→5 para confianza emisora persistida. Nunca ejecutar esa migración sobre bases originales como comprobación incidental.
 - `tools.prepare_demo` crea solo un directorio externo nuevo; `tools.run_demo` carga configuración DPAPI y prepara arranque/compilación/túnel por acción explícita del usuario. Estas herramientas no se ejecutaron durante C8.
 - Seguir `GUIA_PRUEBA_MANUAL.md`. APK necesita URL HTTPS e identidad externa correspondientes; el túnel ngrok se abre manualmente, no al importar backend.
+
+El corte C8-BE-02 ejecutó la preparación exclusivamente sobre una nueva carpeta
+externa `C:\Users\anita\TFG-Demo-Manual`, con dominio fijo
+`unfailing-bless-thrift.ngrok-free.dev`. No recrear esa carpeta ni su identidad.
+El modo start del launcher abre backend propio oculto y túnel con token local;
+Enter detiene esos procesos. No se ejecutó start ni pagos durante esta preparación.

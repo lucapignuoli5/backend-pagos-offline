@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("backend", "pos", "android", "credentials", "tunnel"))
+    parser.add_argument("mode", choices=("backend", "pos", "android", "credentials", "tunnel", "start"))
     parser.add_argument("--directory", required=True, type=Path)
     parser.add_argument("--domain", help="Existing reserved ngrok hostname, without https://")
     args = parser.parse_args()
@@ -19,11 +19,20 @@ def main():
     config = json.loads(WindowsDpapiProtector().unprotect((directory / "config.dpapi").read_bytes()))
     environment = dict(os.environ, **config)
     source = Path(__file__).resolve().parents[1]
-    if args.mode == "tunnel":
+    if args.mode in {"tunnel", "start"}:
         from getpass import getpass
         from pyngrok import ngrok
         from pyngrok.conf import PyngrokConfig
-        token = os.getenv("NGROK_AUTHTOKEN") or getpass("Authtoken ngrok (entrada oculta): ")
+        token = os.getenv("NGROK_AUTHTOKEN")
+        if not token:
+            import yaml
+            existing = Path(os.environ["LOCALAPPDATA"]) / "ngrok" / "ngrok.yml"
+            if existing.is_file():
+                record = yaml.safe_load(existing.read_text(encoding="utf-8")) or {}
+                agent = record.get("agent") or {}
+                token = record.get("authtoken") or agent.get("authtoken")
+        if not token:
+            token = getpass("Authtoken ngrok (entrada oculta): ")
         if not token:
             parser.error("Authtoken required; retrieve it from your own ngrok account")
         tunnel_config = PyngrokConfig(
@@ -36,22 +45,41 @@ def main():
         if domain and ("/" in domain or ":" in domain or not domain.isascii()):
             parser.error("--domain must be a hostname without scheme, port or path")
         options = {"domain": domain} if domain else {}
+        backend = None
+        log = None
         try:
+            if args.mode == "start":
+                log = (directory / "backend.log").open("a", encoding="utf-8")
+                backend = subprocess.Popen(
+                    [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
+                    cwd=source, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW,
+                )
             tunnel = ngrok.connect(addr="http://127.0.0.1:8000", proto="http",
                                    bind_tls=True, pyngrok_config=tunnel_config, **options)
             url = tunnel.public_url
             if not url.startswith("https://"):
                 raise RuntimeError("Tunnel did not return HTTPS")
+            if backend is not None and backend.poll() is not None:
+                raise RuntimeError("Backend no pudo iniciar; consulte backend.log")
             config["API_BASE_URL"] = url.rstrip("/") + "/"
             config["TFG_BACKEND_URL"] = url.rstrip("/")
             protected = WindowsDpapiProtector().protect(json.dumps(config).encode())
             (directory / "config.dpapi").write_bytes(protected)
             print("URL HTTPS guardada en la configuracion local:", url)
-            print("Mantenga esta ventana abierta. Compile Android en otra terminal.")
-            input("Enter para cerrar el tunel: ")
+            print("Mantenga esta ventana abierta durante el login y la sincronizacion.")
+            print("El APK debe usar esta misma URL. El pago QR requiere ambos telefonos en la misma Wi-Fi.")
+            input("Enter para cerrar la demostracion: ")
         finally:
             # Dedicated executable path: do not stop an unrelated ngrok process.
-            ngrok.kill(pyngrok_config=tunnel_config)
+            try:
+                ngrok.kill(pyngrok_config=tunnel_config)
+            finally:
+                if backend is not None:
+                    backend.terminate()
+                    backend.wait()
+                if log is not None:
+                    log.close()
         return
     if args.mode == "credentials":
         # An explicit user action copies only demo login data, never JWT/private keys.
@@ -63,6 +91,7 @@ def main():
         android = source.parent / "Prototipo Pagos Offline Android"
         environment["JAVA_HOME"] = r"C:\Program Files\Android\Android Studio\jbr"
         environment["ANDROID_HOME"] = str(Path(os.environ["LOCALAPPDATA"]) / "Android" / "Sdk")
+        environment["DEMO_ISOLATED_INSTALL"] = "true"
         command = [str(android / "gradlew.bat"), ":app:assembleDebug", ":app:assembleDebugAndroidTest", "--console=plain"]
         cwd = android
     elif args.mode == "backend":

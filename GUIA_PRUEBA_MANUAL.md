@@ -4,6 +4,20 @@ Estado: correcciones programadas; funcionamiento pendiente de prueba manual.
 Durante esta entrega solo se permite compilar Android y revisar sintaxis Python.
 Los comandos de preparación y arranque siguientes los ejecuta el usuario.
 
+## Demostración ya preparada en esta PC — 14/10/2026
+
+- Carpeta: `C:\Users\anita\TFG-Demo-Manual`.
+- Dominio: `https://unfailing-bless-thrift.ngrok-free.dev/`.
+- La base nueva, cuentas simuladas e identidad DPAPI ya fueron creadas; no repetir
+  prepare_demo sobre esta carpeta ni reemplazar su configuración.
+- Abrir `INICIAR_DEMO.cmd`: inicia backend oculto y ngrok en la ventana del launcher,
+  reutilizando el token local ya configurado sin mostrarlo. Mantener esa ventana abierta.
+- `Pagos-Offline-Demo.apk` se instala como Pagos Offline Demo (`.manual`) junto a la
+  aplicación anterior y conserva separados sus datos, claves y sesión.
+- Seguir `LEEME.md` de esa carpeta: cliente → comercio → volver a ingresar cliente
+  para actualizar las claves. Ambos teléfonos en la misma Wi-Fi; cobro QR de $10.
+- No se ejecutaron servidor, túnel, pagos ni pruebas al preparar esta entrega.
+
 ## Preparación única
 
 Desde este repositorio, usar el entorno nuevo `.venv313` (CPython 3.13 x64).
