@@ -571,3 +571,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** la apertura de la ventana y la migración deben hacerse sobre copias controladas; evidencia ausente o contradictoria requiere revisión y no se concilia automáticamente.
 - **Commit:** `feat(compat): [TFG-C2-BE-08] inventariar evidencia v2`
 - **Impacto académico:** hace explícito el límite entre recuperación histórica v2 y pagos nuevos v3.
+
+## TFG-C7-DOC-03 — Registrar compatibilidad histórica controlada
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** instrucciones y registro consolidado reflejan que v2 requiere inventario previo y que la ventana de importación permanece cerrada por defecto.
+- **Archivos:** `AGENTS.md`, registros académicos y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** la migración y conciliación de datos históricos no se consideran comprobadas.
+- **Commit:** `docs(corrections): [TFG-C7-DOC-03] registrar compatibilidad historica`
+- **Impacto académico:** distingue la compatibilidad programada de una migración ya validada.
