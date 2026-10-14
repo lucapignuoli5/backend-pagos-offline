@@ -222,10 +222,14 @@ class OfflineCommitment(Base):
 
 class CommitmentEmission(Base):
     __tablename__ = "offline_commitment_emissions"
-    __table_args__ = (UniqueConstraint("authorization_id", "operation_id", name="uq_commitment_operation"),)
+    __table_args__ = (
+        UniqueConstraint("authorization_id", "operation_id", name="uq_commitment_operation"),
+        UniqueConstraint("authorization_id", "issuance_index", name="uq_commitment_issuance_index"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), nullable=False, index=True)
     operation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    issuance_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

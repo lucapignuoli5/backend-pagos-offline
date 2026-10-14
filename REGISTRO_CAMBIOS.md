@@ -492,3 +492,13 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** matriz de validación, benchmark completo, instrumentadas y hardware quedan para la ejecución agrupada posterior.
 - **Commit:** `docs(plan): [TFG-C7-DOC-01] consolidar implementacion pendiente de validar`
+## TFG-C5-BE-01 — Conciliación v3 nativa y cierre verificable
+
+- **Fecha:** 2026-10-14
+- **Fase:** C5
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** `/api/v3/offline-payments/sync` recibe autorización separada, valida solicitud/autorización/comprobante/acuse v3, distingue estado de envío y operación, aplica contabilidad y compromiso en una transacción e impide reutilizar índices. La emisión toma un bloqueo de escritura y el cierre comprueba cada evidencia del manifiesto; el reintento idéntico de cierre es idempotente.
+- **Archivos:** `schemas.py`, `models.py`, `migrations.py`, `api_v3.py`, `sync_v3.py` y POS v3.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** validación HTTP, concurrencia y rollback permanecen pendientes.
+- **Commit:** `feat(v3): [TFG-C5-BE-01] integrar conciliacion y POS v3`

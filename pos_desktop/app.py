@@ -30,6 +30,11 @@ def main() -> int:
     key_store = PosKeyStore(database, WindowsDpapiProtector())
     simulator = AndroidHceSimulator() if config.simulator else None
     if simulator is not None:
+        config = replace(
+            config,
+            issuer_public_key_b64=simulator.issuer_public_key_b64,
+            issuer_key_id=simulator.issuer_key_id,
+        )
         _, public_key, fingerprint = key_store.get_or_create(config.pos_key_id)
         simulator.trust_pos_key(config.pos_key_id, fingerprint, public_key)
         database.trust_wallet_key(

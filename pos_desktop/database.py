@@ -14,6 +14,7 @@ class PosOperation:
     amount_cents: int
     nonce: str
     request_envelope: bytes
+    authorization_envelope: bytes | None
     receipt_envelope: bytes | None
     ack_envelope: bytes | None
     state: str
@@ -41,7 +42,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 3:
+            if version > 4:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -113,6 +114,16 @@ class PosDatabase:
                         expires_at TEXT NOT NULL
                     );
                     PRAGMA user_version=3;
+                    COMMIT;
+                    """
+                )
+                version = 3
+            if version == 3:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    ALTER TABLE operations ADD COLUMN authorization_envelope BLOB;
+                    PRAGMA user_version=4;
                     COMMIT;
                     """
                 )
@@ -218,6 +229,17 @@ class PosDatabase:
 
     def mark_request_delivered(self, operation_id: str, now: str) -> None:
         self._transition(operation_id, {"REQUEST_CREATED", "REQUEST_DELIVERED"}, "REQUEST_DELIVERED", now)
+
+    def set_authorization(self, operation_id: str, envelope: bytes, now: str) -> None:
+        with closing(self.connect()) as db:
+            result = db.execute(
+                """UPDATE operations SET authorization_envelope=?, updated_at=?
+                   WHERE operation_id=? AND state IN ('REQUEST_DELIVERED','WAITING_CONFIRMATION')
+                     AND (authorization_envelope IS NULL OR authorization_envelope=?)""",
+                (envelope, now, operation_id, envelope),
+            )
+            if result.rowcount != 1:
+                raise ValueError("Autorizacion conflictiva para la operacion")
 
     def accept_receipt_and_ack(
         self, operation_id: str, receipt: bytes, ack: bytes, now: str,

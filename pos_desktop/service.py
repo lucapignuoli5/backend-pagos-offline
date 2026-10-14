@@ -13,6 +13,13 @@ from protocol_v2 import (
     INS_PUT_REQUEST, MAX_AMOUNT_CENTS, build_apdu, chunk_message, encode_signed_envelope,
     parse_signed_envelope, payload_digest, sign_payload,
 )
+from protocol_v3 import (
+    INS_GET_AUTHORIZATION, PROTOCOL_VERSION, canonical_bytes as canonical_bytes_v3,
+    encode_signed_envelope as encode_signed_envelope_v3,
+    parse_select_capabilities, parse_signed_envelope as parse_signed_envelope_v3,
+    payload_digest as payload_digest_v3, sign_payload as sign_payload_v3,
+    validate_ack_binding, validate_receipt_binding, verify_authorization,
+)
 from pos_desktop.config import PosConfig
 from pos_desktop.database import PosDatabase, PosOperation
 from pos_desktop.key_store import PosKeyStore
@@ -42,7 +49,7 @@ class PosService:
         issued = self.now().astimezone(timezone.utc).replace(microsecond=0)
         expires = issued + timedelta(seconds=120)
         payload = {
-            "version": 2,
+            "version": PROTOCOL_VERSION,
             "type": "payment_request",
             "operation_id": str(uuid4()),
             "merchant_id": self.config.merchant_id,
@@ -55,7 +62,7 @@ class PosService:
             "pos_key_id": self.config.pos_key_id,
             "pos_key_fingerprint": fingerprint,
         }
-        envelope = encode_signed_envelope(payload, sign_payload(payload, private_key))
+        envelope = encode_signed_envelope_v3(payload, sign_payload_v3(payload, private_key))
         timestamp = self._timestamp(issued)
         self.database.insert_request(payload, envelope, timestamp)
         return self._required_operation(payload["operation_id"])
@@ -65,7 +72,7 @@ class PosService:
         transport = self.transport_factory()
         try:
             transport.connect()
-            select_hce(transport)
+            parse_select_capabilities(select_hce(transport))
             response_body = b""
             chunks = chunk_message(operation.request_envelope, DEFAULT_CHUNK_BYTES)
             for sequence, chunk in enumerate(chunks):
@@ -88,7 +95,7 @@ class PosService:
         transport = self.transport_factory()
         try:
             transport.connect()
-            select_hce(transport)
+            parse_select_capabilities(select_hce(transport))
             if operation.ack_envelope is not None:
                 self._send_ack(transport, operation.ack_envelope, operation_id)
                 return "LOCALLY_ACCEPTED"
@@ -98,8 +105,12 @@ class PosService:
                 self.database.mark_waiting(operation_id, self._now_text())
                 return state
 
+            authorization_bytes = self._read_fragmented(
+                transport, INS_GET_AUTHORIZATION, operation_id, "Lectura de autorizacion"
+            )
+            self.database.set_authorization(operation_id, authorization_bytes, self._now_text())
             receipt_bytes = self._read_receipt(transport, operation_id)
-            receipt = self._verify_receipt(operation, receipt_bytes)
+            receipt, request, grant = self._verify_receipt(operation, receipt_bytes, authorization_bytes)
             private_key, _, fingerprint = self.key_store.get_or_create(self.config.pos_key_id)
             accepted = self.now().astimezone(timezone.utc).replace(microsecond=0)
             expires = self._parse_timestamp(receipt["expires_at"])
@@ -116,11 +127,12 @@ class PosService:
                 type="payment_ack",
                 pos_key_id=self.config.pos_key_id,
                 pos_key_fingerprint=fingerprint,
-                receipt_digest=payload_digest(receipt),
+                receipt_digest=payload_digest_v3(parse_signed_envelope_v3(receipt_bytes)),
                 accepted_at=self._timestamp(accepted),
                 status="LOCALLY_ACCEPTED",
             )
-            ack_bytes = encode_signed_envelope(ack, sign_payload(ack, private_key))
+            ack_bytes = encode_signed_envelope_v3(ack, sign_payload_v3(ack, private_key))
+            validate_ack_binding(request, parse_signed_envelope_v3(receipt_bytes), parse_signed_envelope_v3(ack_bytes))
             self.database.accept_receipt_and_ack(
                 operation_id, receipt_bytes, ack_bytes, self._timestamp(accepted)
             )
@@ -137,13 +149,17 @@ class PosService:
         return self._parse_status(body, operation_id)
 
     def _read_receipt(self, transport: ApduTransport, operation_id: str) -> bytes:
+        return self._read_fragmented(transport, INS_GET_RECEIPT, operation_id, "Lectura de comprobante")
+
+    def _read_fragmented(self, transport: ApduTransport, instruction: int,
+                         operation_id: str, action: str) -> bytes:
         chunks: list[bytes] = []
         for sequence in range(26):
             body = require_ok(
                 transport.transceive(
-                    build_apdu(INS_GET_RECEIPT, sequence, True, operation_id.encode("ascii"))
+                    build_apdu(instruction, sequence, True, operation_id.encode("ascii"))
                 ),
-                "Lectura de comprobante",
+                action,
             )
             if not body:
                 raise ValueError("Fragmento de comprobante vacio")
@@ -157,24 +173,18 @@ class PosService:
                 return b"".join(chunks)
         raise ValueError("El comprobante excede la cantidad maxima de fragmentos")
 
-    def _verify_receipt(self, operation: PosOperation, receipt_bytes: bytes) -> dict:
-        request = parse_signed_envelope(operation.request_envelope).payload
-        envelope = parse_signed_envelope(receipt_bytes)
+    def _verify_receipt(self, operation: PosOperation, receipt_bytes: bytes,
+                        authorization_bytes: bytes) -> tuple[dict, object, object]:
+        request = parse_signed_envelope_v3(operation.request_envelope)
+        envelope = parse_signed_envelope_v3(receipt_bytes)
+        grant = parse_signed_envelope_v3(authorization_bytes)
         receipt = envelope.payload
-        public_key = self.database.resolve_wallet_key(
-            receipt["wallet_key_id"], receipt["wallet_key_fingerprint"], receipt["wallet_id"]
-        )
-        if public_key is None or not envelope.verify(public_key):
-            raise ValueError("Firma de billetera no confiable")
-        common = (
-            "operation_id", "merchant_id", "terminal_id", "amount_cents", "currency",
-            "nonce", "issued_at", "expires_at",
-        )
-        if any(request[field] != receipt[field] for field in common):
-            raise ValueError("El comprobante no coincide con la solicitud")
-        if receipt["request_digest"] != payload_digest(request):
-            raise ValueError("El comprobante no vincula la solicitud exacta")
-        return receipt
+        if not self.config.issuer_public_key_b64 or not self.config.issuer_key_id:
+            raise ValueError("Confianza del emisor v3 no configurada")
+        if not verify_authorization(grant, self.config.issuer_public_key_b64, self.config.issuer_key_id):
+            raise ValueError("Autorizacion offline no confiable")
+        validate_receipt_binding(request, envelope, grant)
+        return receipt, request, grant
 
     def _send_ack(self, transport: ApduTransport, ack: bytes, operation_id: str) -> None:
         chunks = chunk_message(ack, DEFAULT_CHUNK_BYTES)

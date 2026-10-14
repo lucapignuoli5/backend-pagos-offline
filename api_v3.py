@@ -7,7 +7,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,7 @@ from clock import utc_now
 from auth import get_current_user, require_role
 from database import get_db
 from issuer_keys import IssuerIdentity
-from protocol_v3 import parse_signed_envelope, validate_close_manifest, verify_authorization
+from protocol_v3 import parse_signed_envelope, payload_digest, validate_close_manifest, verify_authorization
 from sync_v3 import process_evidence_v3
 from settings import MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
@@ -48,6 +48,14 @@ def issue_authorization_v3(
         raise HTTPException(503, "Emisor v3 no disponible") from exc
     now = utc_now().replace(microsecond=0)
     total = request.max_payment_cents * request.max_payments
+    locked = db.execute(
+        update(models.Wallet).where(models.Wallet.id == wallet.id).values(
+            confirmed_balance_cents=models.Wallet.confirmed_balance_cents
+        )
+    )
+    if locked.rowcount != 1:
+        db.rollback()
+        raise HTTPException(409, "No se pudo reservar el presupuesto offline")
     committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents), 0)).filter(
         models.OfflineCommitment.wallet_id == wallet.id, models.OfflineCommitment.closed.is_(False)
     ).scalar())
@@ -91,7 +99,7 @@ def commitment_v3(authorization_id: str, db: DbSession, user: CurrentUser):
 def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthorizationCloseRequest,
                            db: DbSession, user: CurrentUser):
     commitment = db.get(models.OfflineCommitment, authorization_id)
-    if commitment is None or commitment.closed:
+    if commitment is None:
         raise HTTPException(404, "Compromiso no encontrado")
     wallet = db.get(models.Wallet, commitment.wallet_id)
     if wallet is None or wallet.user_id != user.id:
@@ -106,8 +114,26 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
         entries = validate_close_manifest(close, grant, manifest)
         if close.payload["authorization_id"] != authorization_id:
             raise ValueError("authorization")
+        if commitment.closed:
+            if commitment.closure_id == close.payload["closure_id"]:
+                return commitment
+            raise HTTPException(409, "Autorizacion cerrada con otra evidencia")
         if sum(int(entry["amount_cents"]) for entry in entries) != commitment.emitted_cents:
             raise ValueError("manifest")
+        for entry in entries:
+            emission = db.query(models.CommitmentEmission).filter_by(
+                authorization_id=authorization_id,
+                operation_id=entry["operation_id"],
+                issuance_index=entry["issuance_index"],
+            ).one_or_none()
+            payment = db.get(models.OfflinePaymentV2, entry["operation_id"])
+            if (emission is None or payment is None or payment.state != "ACCEPTED"
+                    or emission.amount_cents != entry["amount_cents"]
+                    or payload_digest(parse_signed_envelope(payment.receipt_envelope)) != entry["receipt_digest"]):
+                raise ValueError("manifest evidence")
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(422, "Cierre invalido") from exc
@@ -117,29 +143,11 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
     return commitment
 
 
-@router.post("/offline-payments/sync", response_model=schemas.OfflinePaymentSyncV2Response)
-def sync_v3(request: schemas.OfflinePaymentSyncV2Request, db: DbSession, user: CurrentUser):
-    results = []
-    for evidence in request.operations:
-        result = process_evidence_v3(db, user, evidence)
-        results.append(result)
-        if result.status == "ACCEPTED":
-            payment = db.get(models.OfflinePaymentV2, evidence.operation_id)
-            if payment is not None:
-                commitment = db.get(models.OfflineCommitment, payment.authorization_id)
-                already = db.query(models.CommitmentEmission).filter_by(
-                    authorization_id=payment.authorization_id, operation_id=payment.operation_id
-                ).first()
-                if commitment is not None and already is None and commitment.emitted_cents + payment.amount_cents <= commitment.reserved_cents:
-                    db.add(models.CommitmentEmission(
-                        authorization_id=payment.authorization_id,
-                        operation_id=payment.operation_id,
-                        amount_cents=payment.amount_cents,
-                    ))
-                    commitment.emitted_cents = min(commitment.reserved_cents, commitment.emitted_cents + payment.amount_cents)
-                    commitment.emitted_count += 1
-                    db.commit()
-    return schemas.OfflinePaymentSyncV2Response(results=results)
+@router.post("/offline-payments/sync", response_model=schemas.OfflinePaymentSyncV3Response)
+def sync_v3(request: schemas.OfflinePaymentSyncV3Request, db: DbSession, user: CurrentUser):
+    return schemas.OfflinePaymentSyncV3Response(
+        results=[process_evidence_v3(db, user, evidence) for evidence in request.operations]
+    )
 
 
 @router.post("/offline-payments/{operation_id}/resolution")

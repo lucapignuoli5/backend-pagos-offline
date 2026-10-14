@@ -28,6 +28,17 @@ def run_schema_migrations(engine: Engine) -> None:
                 connection.execute(
                     text("UPDATE terminals SET merchant_id = 'merchant-' || merchant_user_id WHERE merchant_id IS NULL")
                 )
+    inspector = inspect(engine)
+    if "offline_commitment_emissions" in inspector.get_table_names():
+        emission_columns = {column["name"] for column in inspector.get_columns("offline_commitment_emissions")}
+        if "issuance_index" not in emission_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE offline_commitment_emissions ADD COLUMN issuance_index INTEGER"))
+                connection.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_commitment_issuance_index "
+                    "ON offline_commitment_emissions(authorization_id, issuance_index) "
+                    "WHERE issuance_index IS NOT NULL"
+                ))
 
 
 def backfill_wallets(db: Session) -> int:

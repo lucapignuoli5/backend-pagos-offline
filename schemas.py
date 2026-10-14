@@ -187,6 +187,26 @@ class OfflinePaymentSyncV2Response(BaseModel):
     results: list[OfflinePaymentResultV2]
 
 
+class OfflinePaymentEvidenceV3(OfflinePaymentEvidence):
+    authorization_envelope_b64: str = Field(..., min_length=1, max_length=8192)
+
+
+class OfflinePaymentSyncV3Request(BaseModel):
+    operations: list[OfflinePaymentEvidenceV3] = Field(..., min_length=1, max_length=100)
+
+
+class OfflinePaymentResultV3(BaseModel):
+    operation_id: str
+    submission_status: Literal["VALIDATED", "INVALID_EVIDENCE", "CONFLICT", "RETRYABLE_ERROR"]
+    operation_status: Literal["UNRESOLVED", "PENDING_EVIDENCE", "PENDING_REVIEW", "ACCEPTED", "REJECTED"]
+    final: bool
+    code: Optional[str] = None
+
+
+class OfflinePaymentSyncV3Response(BaseModel):
+    results: list[OfflinePaymentResultV3]
+
+
 class OfflinePaymentStatusResponse(BaseModel):
     operation_id: str
     status: str

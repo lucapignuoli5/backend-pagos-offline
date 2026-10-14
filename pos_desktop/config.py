@@ -14,6 +14,8 @@ class PosConfig:
     backend_url: str
     reader_name: str | None
     simulator: bool
+    issuer_public_key_b64: str = ""
+    issuer_key_id: str = ""
 
     @classmethod
     def from_environment(cls) -> "PosConfig":
@@ -26,5 +28,7 @@ class PosConfig:
             backend_url=os.getenv("TFG_BACKEND_URL", "http://127.0.0.1:8000"),
             reader_name=os.getenv("TFG_POS_READER") or None,
             simulator=os.getenv("TFG_POS_SIMULATOR", "0") == "1",
+            issuer_public_key_b64=os.getenv("TFG_ISSUER_PUBLIC_KEY_B64", ""),
+            issuer_key_id=os.getenv("TFG_ISSUER_KEY_ID", ""),
         )
 

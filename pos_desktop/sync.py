@@ -73,11 +73,13 @@ class PosSyncService:
 
     @staticmethod
     def _evidence(operation: PosOperation) -> dict:
-        if operation.receipt_envelope is None or operation.ack_envelope is None:
+        if (operation.authorization_envelope is None or operation.receipt_envelope is None
+                or operation.ack_envelope is None):
             raise ValueError("El POS no puede conciliar evidencia incompleta como aceptada")
         return {
             "operation_id": operation.operation_id,
             "request_envelope_b64": base64.b64encode(operation.request_envelope).decode("ascii"),
+            "authorization_envelope_b64": base64.b64encode(operation.authorization_envelope).decode("ascii"),
             "receipt_envelope_b64": base64.b64encode(operation.receipt_envelope).decode("ascii"),
             "ack_envelope_b64": base64.b64encode(operation.ack_envelope).decode("ascii"),
         }

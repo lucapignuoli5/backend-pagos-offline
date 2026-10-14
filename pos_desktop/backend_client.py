@@ -84,12 +84,28 @@ class PosBackendClient:
 
     def sync_operations(self, access_token: str, operations: list[dict]) -> list[dict]:
         response = self._request(
-            "/api/offline-payments/sync", {"operations": operations}, access_token
+            "/api/v3/offline-payments/sync", {"operations": operations}, access_token
         )
         results = response.get("results")
         if not isinstance(results, list) or any(not isinstance(item, dict) for item in results):
             raise RuntimeError("Respuesta de conciliacion invalida")
-        return results
+        normalized = []
+        for result in results:
+            submission = result.get("submission_status")
+            operation = result.get("operation_status")
+            if submission == "CONFLICT":
+                status = "CONFLICT"
+            elif submission == "RETRYABLE_ERROR":
+                status = "RETRYABLE_ERROR"
+            elif submission == "INVALID_EVIDENCE":
+                status = "CONFLICT"
+            elif operation in {"ACCEPTED", "REJECTED", "PENDING_EVIDENCE"}:
+                status = operation
+            else:
+                status = "PENDING_EVIDENCE"
+            normalized.append({"operation_id": result.get("operation_id"), "status": status,
+                               "code": result.get("code")})
+        return normalized
 
     def get_operation_status(self, access_token: str, operation_id: str) -> dict:
         value = self._get_object(f"/api/offline-payments/{operation_id}", access_token)
