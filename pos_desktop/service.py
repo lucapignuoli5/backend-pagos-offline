@@ -24,6 +24,7 @@ from pos_desktop.config import PosConfig
 from pos_desktop.database import PosDatabase, PosOperation
 from pos_desktop.key_store import PosKeyStore
 from pos_desktop.nfc import ApduTransport, require_ok, select_hce
+from pos_desktop.issuer_trust import public_key as issuer_public_key
 
 
 class PosService:
@@ -179,9 +180,8 @@ class PosService:
         envelope = parse_signed_envelope_v3(receipt_bytes)
         grant = parse_signed_envelope_v3(authorization_bytes)
         receipt = envelope.payload
-        if not self.config.issuer_public_key_b64 or not self.config.issuer_key_id:
-            raise ValueError("Confianza del emisor v3 no configurada")
-        if not verify_authorization(grant, self.config.issuer_public_key_b64, self.config.issuer_key_id):
+        public = issuer_public_key(self.database, self.config, grant.payload)
+        if not verify_authorization(grant, public, grant.payload["issuer_key_id"]):
             raise ValueError("Autorizacion offline no confiable")
         validate_receipt_binding(request, envelope, grant)
         return receipt, request, grant
@@ -196,7 +196,7 @@ class PosService:
                 ),
                 "Entrega de acuse",
             )
-        if self._parse_status(response_body, operation_id) != "LOCALLY_ACCEPTED":
+        if self._parse_status(response_body, operation_id) not in {"LOCALLY_ACCEPTED", "SYNCED"}:
             raise RuntimeError("Android no confirmo el acuse")
 
     @staticmethod

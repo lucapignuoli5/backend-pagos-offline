@@ -286,7 +286,7 @@ class ApduCommand:
 
 
 def build_apdu(instruction: int, sequence: int, is_last: bool, data: bytes = b"") -> bytes:
-    if instruction not in {INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK}:
+    if instruction not in {INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK, 0x50}:
         raise ProtocolError("Instruccion APDU no soportada")
     if not 0 <= sequence <= 255:
         raise ProtocolError("Secuencia APDU fuera de rango")
@@ -300,7 +300,7 @@ def parse_apdu(apdu: bytes) -> ApduCommand:
     if len(apdu) < 5 or apdu[0] != CLA_TFG:
         raise ProtocolError("Cabecera APDU invalida")
     instruction, sequence, p2, length = apdu[1], apdu[2], apdu[3], apdu[4]
-    if instruction not in {INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK}:
+    if instruction not in {INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK, 0x50}:
         raise ProtocolError("Instruccion APDU no soportada")
     if p2 not in {P2_MORE, P2_LAST} or len(apdu) != 5 + length:
         raise ProtocolError("Longitud o indicador APDU invalido")

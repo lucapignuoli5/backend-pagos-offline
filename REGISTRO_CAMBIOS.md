@@ -583,3 +583,19 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Limitaciones:** la migración y conciliación de datos históricos no se consideran comprobadas.
 - **Commit:** `docs(corrections): [TFG-C7-DOC-03] registrar compatibilidad historica`
 - **Impacto académico:** distingue la compatibilidad programada de una migración ya validada.
+## TFG-C8-BE-01 — Preparación para prueba manual
+
+- Fecha: 2026-10-14. Estado: IMPLEMENTADA / VALIDACIÓN FUNCIONAL PENDIENTE.
+- Requisito: corregir bloqueos de compilación, APDU v3, aprovisionamiento y recuperación.
+- Validación autorizada: solo compilación Android y sintaxis Python; sin pruebas ni arranque.
+- Datos existentes: conservar; configuración y demostración nuevas fuera de Git.
+- Comportamiento anterior: APDU 0x50 rechazado; reloj del simulador mezclado; verificación solo con emisor activo; revocación sin fecha; mensajes de aceptación durante espera y consultas POS v2.
+- Comportamiento nuevo: APDU compartido acepta autorización v3; simulador recibe reloj y conserva índices/comprobantes; backend verifica inventarios externos históricos; POS persiste confianza emisora en SQLite 5; revocaciones con fecha y evidencia posterior en revisión; recuperación y estados finales conservados.
+- Archivos: `protocol_v2.py`, `api_v3.py`, `sync_v2.py`, `sync_v3.py`, `models.py`, `migrations.py`, `issuer_trust.py`, `revocation.py`, módulos `pos_desktop/`, herramientas `tools/prepare_demo.py`, `tools/run_demo.py`, `tools/revoke_key.py`, configuración, lock y guía manual.
+- Contratos/datos: `registered_keys.revoked_at` aditivo; POS 4→5; emisores públicos fijados por ID/huella; sin cambio de bytes históricos ni generación de evidencia v2.
+- Entorno: CPython 3.13.13 x64 adicional en `.venv313`; 33 paquetes instalados desde lock, incluido pyscard 2.3.1. No se acredita funcionamiento por instalación.
+- Verificación: sintaxis Python mediante AST correcta en 53 archivos, sin importar aplicación. No pruebas, simulador, pagos, migraciones ni servicios ejecutados.
+- Limitaciones: herramientas de preparación/arranque no ejecutadas; URL HTTPS real y hardware pendientes; suites heredadas de la auditoría siguen sin revalidarse.
+- Aclaración del equipo: conservar el dominio fijo ngrok anterior. El launcher admite `--domain` y reutiliza el hostname guardado; no se abrió túnel durante esta entrega.
+- Commit: `fix(manual): [TFG-C8-BE-01] preparar ejecucion controlada`.
+- Impacto académico: preparación reproducible para prueba manual; no acredita atomicidad, migración ni interoperabilidad.

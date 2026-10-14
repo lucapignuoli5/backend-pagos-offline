@@ -64,6 +64,12 @@ def run_schema_migrations(engine: Engine) -> None:
                 text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'cliente'")
             )
     inspector = inspect(engine)
+    if "registered_keys" in inspector.get_table_names():
+        key_columns = {column["name"] for column in inspector.get_columns("registered_keys")}
+        if "revoked_at" not in key_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE registered_keys ADD COLUMN revoked_at DATETIME"))
+    inspector = inspect(engine)
     if "wallets" in inspector.get_table_names():
         wallet_columns = {column["name"] for column in inspector.get_columns("wallets")}
         if "offline_review_required" not in wallet_columns:

@@ -42,7 +42,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 4:
+            if version > 5:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -127,6 +127,38 @@ class PosDatabase:
                     COMMIT;
                     """
                 )
+                version = 4
+            if version == 4:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    CREATE TABLE trusted_issuer_keys (
+                        key_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                        public_key_b64 TEXT NOT NULL,
+                        PRIMARY KEY(key_id, fingerprint)
+                    );
+                    PRAGMA user_version=5;
+                    COMMIT;
+                    """
+                )
+
+    def trust_issuer_key(self, key_id, fingerprint, public_key_b64):
+        from protocol_v3 import decode_base64, public_key_fingerprint
+        if public_key_fingerprint(decode_base64(public_key_b64)) != fingerprint:
+            raise ValueError("Issuer fingerprint mismatch")
+        with closing(self.connect()) as db:
+            db.execute(
+                "INSERT OR IGNORE INTO trusted_issuer_keys VALUES (?, ?, ?)",
+                (key_id, fingerprint, public_key_b64),
+            )
+
+    def get_issuer_key(self, key_id, fingerprint):
+        with closing(self.connect()) as db:
+            row = db.execute(
+                "SELECT public_key_b64 FROM trusted_issuer_keys WHERE key_id=? AND fingerprint=?",
+                (key_id, fingerprint),
+            ).fetchone()
+            return row[0] if row else None
 
     def save_profile(
         self, user_id: int, merchant_id: str, terminal_id: str, key_id: str, provisioned_at: str,
@@ -288,7 +320,9 @@ class PosDatabase:
         with closing(self.connect()) as db:
             rows = db.execute(
                 """SELECT * FROM operations
-                   WHERE state='LOCALLY_ACCEPTED'
+                   WHERE state='LOCALLY_ACCEPTED' AND authorization_envelope IS NOT NULL
+                     AND (NOT EXISTS (SELECT 1 FROM pos_profile)
+                          OR terminal_id=(SELECT terminal_id FROM pos_profile WHERE singleton=1))
                      AND (next_sync_at IS NULL OR next_sync_at <= ?)
                    ORDER BY updated_at ASC LIMIT ?""",
                 (now, limit),
@@ -310,7 +344,7 @@ class PosDatabase:
                    sync_attempts=CASE WHEN ? IN ('PENDING_EVIDENCE','RETRYABLE_ERROR')
                                       THEN sync_attempts + 1 ELSE sync_attempts END,
                    next_sync_at=?, last_sync_error=?
-                   WHERE operation_id=? AND state IN ('LOCALLY_ACCEPTED','SYNCED','REJECTED','CONFLICT')""",
+                   WHERE operation_id=? AND state='LOCALLY_ACCEPTED'""",
                 (state, now, status, next_sync_at, code, operation_id),
             )
             if result.rowcount != 1:

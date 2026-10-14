@@ -25,17 +25,21 @@ class AndroidHceSimulator:
         self, wallet_id: str = "wallet-simulator",
         authorization_id: str = "authorization-simulator",
         wallet_key_id: str = "wallet-key-simulator",
+        now=None,
     ):
         self.wallet_id = wallet_id
         self.authorization_id = authorization_id
         self.wallet_key_id = wallet_key_id
+        self.now = now or (lambda: datetime.now(timezone.utc))
+        self.next_issuance_index = 1
+        self.remaining_cents = 1000000
         self.wallet_private_key = ec.generate_private_key(ec.SECP256R1())
         self.wallet_public_key_b64 = encode_public_key(self.wallet_private_key.public_key())
         self.wallet_fingerprint = public_key_fingerprint(base64.b64decode(self.wallet_public_key_b64))
         self.issuer_key_id = "issuer-simulator"
         self.issuer_private_key = ec.generate_private_key(ec.SECP256R1())
         self.issuer_public_key_b64 = encode_public_key(self.issuer_private_key.public_key())
-        issued = datetime.now(timezone.utc).replace(microsecond=0)
+        issued = self.now().astimezone(timezone.utc).replace(microsecond=0)
         grant = {
             "version": 3, "type": "offline_authorization", "authorization_id": authorization_id,
             "wallet_id": wallet_id, "wallet_key_id": wallet_key_id,
@@ -105,12 +109,15 @@ class AndroidHceSimulator:
             return SW_BAD_DATA
 
     def confirm(self, operation_id: str) -> bytes:
+        if operation_id in self.receipts:
+            return self.receipts[operation_id]
         request_envelope = self.requests[operation_id]
         request_signed = parse_signed_envelope(request_envelope)
         request = request_signed.payload
         grant = parse_signed_envelope(self.authorization_envelope)
-        confirmed = min(datetime.now(timezone.utc).replace(microsecond=0),
-                        datetime.fromisoformat(request["expires_at"].replace("Z", "+00:00")))
+        confirmed = self.now().astimezone(timezone.utc).replace(microsecond=0)
+        if self.next_issuance_index > grant.payload["max_payments"] or request["amount_cents"] > self.remaining_cents:
+            raise ValueError("Simulated authorization exhausted")
         receipt = {
             key: request[key] for key in (
                 "version", "operation_id", "merchant_id", "terminal_id", "amount_cents",
@@ -125,12 +132,14 @@ class AndroidHceSimulator:
             wallet_key_fingerprint=self.wallet_fingerprint,
             request_digest=payload_digest(request_signed),
             authorization_digest=payload_digest(grant),
-            issuance_index=1,
+            issuance_index=self.next_issuance_index,
             confirmed_at=timestamp(confirmed),
         )
         envelope = encode_signed_envelope(receipt, sign_payload(receipt, self.wallet_private_key))
         validate_receipt_binding(request_signed, parse_signed_envelope(envelope), grant)
         self.receipts[operation_id] = envelope
+        self.next_issuance_index += 1
+        self.remaining_cents -= request["amount_cents"]
         return envelope
 
     def _accept_fragment(self, instruction: int, sequence: int, is_last: bool, data: bytes) -> bytes:

@@ -8,7 +8,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from database import get_db
 from issuer_keys import IssuerIdentity
 from protocol_v3 import parse_signed_envelope, payload_digest, validate_close_manifest, verify_authorization
 from sync_v3 import process_evidence_v3
+from issuer_trust import issuer_public_key, verify_trusted_authorization
 from settings import LEGACY_INVENTORY_OPEN, MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
 router = APIRouter(prefix="/api/v3")
@@ -160,7 +161,13 @@ def issue_authorization_v3(
     committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents), 0)).filter(
         models.OfflineCommitment.wallet_id == wallet.id, models.OfflineCommitment.closed.is_(False)
     ).scalar())
-    if wallet.confirmed_balance_cents - committed < total:
+    committed += int(db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
+        models.OfflineAuthorization.wallet_id == wallet.id,
+        models.OfflineAuthorization.active.is_(True),
+        ~models.OfflineAuthorization.id.in_(select(models.OfflineCommitment.authorization_id)),
+    ).scalar())
+    if wallet.offline_review_required or wallet.confirmed_balance_cents - committed < total:
+        db.rollback()
         raise HTTPException(409, "Saldo insuficiente para compromiso")
     auth_id = str(uuid4())
     expires = now + timedelta(seconds=OFFLINE_AUTHORIZATION_SECONDS)
@@ -215,12 +222,14 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
     wallet = db.get(models.Wallet, commitment.wallet_id)
     if wallet is None or wallet.user_id != user.id:
         raise HTTPException(403, "Autorizacion no autorizada")
+    db.execute(update(models.Wallet).where(models.Wallet.id == wallet.id).values(
+        confirmed_balance_cents=models.Wallet.confirmed_balance_cents))
+    db.refresh(commitment)
     try:
         close = parse_signed_envelope(base64.b64decode(request.close_envelope_b64, validate=True))
         grant = parse_signed_envelope(commitment.authorization_envelope or b"")
         manifest = base64.b64decode(request.manifest_b64, validate=True)
-        issuer = IssuerIdentity.load_external(os.environ["ISSUER_KEY_PATH"], os.environ["ISSUER_KEY_FINGERPRINT"])
-        if not verify_authorization(grant, issuer.public_key_b64, issuer.key_id):
+        if not verify_trusted_authorization(grant):
             raise ValueError("grant")
         entries = validate_close_manifest(close, grant, manifest)
         if close.payload["authorization_id"] != authorization_id:
@@ -289,14 +298,16 @@ def store_resolution_v3(operation_id: str, request: schemas.PaymentResolutionReq
         if (envelope.payload.get("operation_id") != operation_id
                 or envelope.payload.get("operation_status") != payment.state
                 or envelope.payload.get("wallet_id") != payment.wallet_id
+                or envelope.payload.get("merchant_id") != payment.merchant_id
+                or envelope.payload.get("currency") != payment.currency
+                or envelope.payload.get("offline_authorization_id") != payment.authorization_id
                 or envelope.payload.get("terminal_id") != payment.terminal_id
                 or envelope.payload.get("amount_cents") != payment.amount_cents
                 or envelope.payload.get("request_digest") != payload_digest(request_envelope)
                 or envelope.payload.get("receipt_digest") != payload_digest(receipt)
                 or envelope.payload.get("authorization_digest") != payload_digest(grant)):
             raise ValueError("resolution")
-        issuer = IssuerIdentity.load_external(os.environ["ISSUER_KEY_PATH"], os.environ["ISSUER_KEY_FINGERPRINT"])
-        if not envelope.verify(issuer.public_key_b64):
+        if not envelope.verify(issuer_public_key(envelope.payload)):
             raise ValueError("signature")
     except Exception as exc:
         raise HTTPException(422, "Resolucion invalida") from exc
@@ -366,5 +377,6 @@ def _repeat_authorization(db: Session, previous: models.OfflineAuthorization,
         authorization_id=previous.id, wallet_id=previous.wallet_id,
         authorized_total_cents=commitment.reserved_cents,
         authorization_envelope_b64=base64.b64encode(commitment.authorization_envelope).decode("ascii"),
-        issued_at=previous.issued_at, spend_expires_at=previous.expires_at,
+        issued_at=previous.issued_at.replace(tzinfo=timezone.utc) if previous.issued_at.tzinfo is None else previous.issued_at,
+        spend_expires_at=previous.expires_at.replace(tzinfo=timezone.utc) if previous.expires_at.tzinfo is None else previous.expires_at,
     )

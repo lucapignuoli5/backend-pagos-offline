@@ -16,6 +16,7 @@ class PosConfig:
     simulator: bool
     issuer_public_key_b64: str = ""
     issuer_key_id: str = ""
+    issuer_trust_path: str = ""
 
     @classmethod
     def from_environment(cls) -> "PosConfig":
@@ -30,5 +31,6 @@ class PosConfig:
             simulator=os.getenv("TFG_POS_SIMULATOR", "0") == "1",
             issuer_public_key_b64=os.getenv("TFG_ISSUER_PUBLIC_KEY_B64", ""),
             issuer_key_id=os.getenv("TFG_ISSUER_KEY_ID", ""),
+            issuer_trust_path=os.getenv("TFG_ISSUER_TRUST_PATH", ""),
         )
 

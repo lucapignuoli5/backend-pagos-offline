@@ -13,6 +13,7 @@ from pos_desktop.nfc import PcscTransport
 from pos_desktop.service import PosService
 from pos_desktop.simulator import AndroidHceSimulator, SimulatorTransport
 from pos_desktop.ui import PosWindow
+from pos_desktop.issuer_trust import provision_pinned_keys
 
 
 def main() -> int:
@@ -46,6 +47,7 @@ def main() -> int:
         transport_factory = lambda: SimulatorTransport(simulator)
     else:
         transport_factory = lambda: PcscTransport(config.reader_name)
+    provision_pinned_keys(database, config)
     service = PosService(config, database, key_store, transport_factory)
     backend = PosBackendClient(config, key_store)
     application = QApplication(sys.argv)

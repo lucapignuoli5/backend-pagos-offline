@@ -14,6 +14,9 @@ import models
 import schemas
 from clock import utc_now
 from issuer_keys import IssuerIdentity
+from issuer_trust import verify_trusted_authorization
+from revocation import requires_review
+from protocol_v3 import parse_timestamp
 from protocol_v3 import (
     MessageType, ProtocolError, parse_signed_envelope, validate_ack_binding,
     payload_digest, validate_receipt_binding, verify_authorization, verify_pos_signer,
@@ -34,25 +37,63 @@ def process_evidence_v3(db: Session, user: models.User,
         if request.payload.get("operation_id") != operation_id or receipt.payload.get("operation_id") != operation_id:
             return _result(operation_id, "INVALID_EVIDENCE", "UNRESOLVED", False, "OPERATION_ID_MISMATCH")
 
+        # Serialize with authorization issuance/closure before observing durable state.
+        db.execute(update(models.Wallet).where(
+            models.Wallet.id == grant.payload["wallet_id"]
+        ).values(confirmed_balance_cents=models.Wallet.confirmed_balance_cents))
+        db.expire_all()
+
         existing = db.get(models.OfflinePaymentV2, operation_id)
         if existing is not None:
             if existing.request_envelope != request_wire or existing.receipt_envelope != receipt_wire:
+                db.rollback()
                 return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "CONTENT_MISMATCH")
             if existing.ack_envelope is not None and ack_wire is not None and existing.ack_envelope != ack_wire:
+                db.rollback()
                 return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "ACK_MISMATCH")
             _authorize(db, user, existing.wallet_id, existing.terminal_id)
             if existing.state in {"ACCEPTED", "REJECTED"}:
+                known_grant = db.get(models.OfflineCommitment, existing.authorization_id)
+                if known_grant is None or known_grant.authorization_envelope != grant_wire:
+                    db.rollback()
+                    return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "AUTHORIZATION_MISMATCH")
                 resolution = db.get(models.PaymentResolution, operation_id)
                 if resolution is None:
+                    db.rollback()
                     return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
                                    "SIGNED_RESOLUTION_MISSING")
-                return _result(operation_id, "VALIDATED", existing.state, True,
+                if existing.ack_envelope is None and ack_wire is not None:
+                    ack = parse_signed_envelope(ack_wire)
+                    validate_ack_binding(request, receipt, ack)
+                    key = db.get(models.RegisteredKey, request.payload["pos_key_id"])
+                    if key is None or not ack.verify(key.public_key_b64):
+                        raise ValueError("late ack signature")
+                    existing.ack_envelope = ack_wire
+                    db.flush()
+                result = _result(operation_id, "VALIDATED", existing.state, True,
                                existing.rejection_code, resolution.resolution_envelope)
+                db.commit()
+                return result
 
-        wallet, merchant_wallet, terminal, authorization, commitment = _validate(
+        wallet, merchant_wallet, terminal, authorization, commitment, review = _validate(
             db, request, grant, grant_wire, receipt, ack_wire
         )
         _authorize(db, user, wallet.id, terminal.id)
+        if review or (existing is not None and existing.state == "PENDING_REVIEW"):
+            if existing is None:
+                db.add(models.OfflinePaymentV2(
+                    operation_id=operation_id, wallet_id=wallet.id,
+                    merchant_id=request.payload["merchant_id"], terminal_id=terminal.id,
+                    authorization_id=authorization.id, amount_cents=request.payload["amount_cents"],
+                    currency=request.payload["currency"], nonce=request.payload["nonce"],
+                    request_envelope=request_wire, receipt_envelope=receipt_wire,
+                    ack_envelope=ack_wire, state="PENDING_REVIEW",
+                    rejection_code="REVOCATION_REVIEW",
+                ))
+            else:
+                existing.state = "PENDING_REVIEW"
+            db.commit()
+            return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False, "REVOCATION_REVIEW")
         if commitment.closed and existing is None:
             wallet.offline_review_required = True
             db.add(models.OfflinePaymentV2(
@@ -107,13 +148,12 @@ def process_evidence_v3(db: Session, user: models.User,
 def _validate(db, request, grant, grant_wire, receipt, ack_wire):
     if request.payload["type"] != MessageType.PAYMENT_REQUEST.value:
         raise ValueError("request")
-    issuer = IssuerIdentity.load_external(os.environ["ISSUER_KEY_PATH"], os.environ["ISSUER_KEY_FINGERPRINT"])
-    if not verify_authorization(grant, issuer.public_key_b64, issuer.key_id):
+    if not verify_trusted_authorization(grant):
         raise ValueError("grant")
     validate_receipt_binding(request, receipt, grant)
     pos_key = db.get(models.RegisteredKey, request.payload["pos_key_id"])
     terminal = db.get(models.Terminal, request.payload["terminal_id"])
-    if (pos_key is None or pos_key.revoked or pos_key.purpose != "pos" or terminal is None
+    if (pos_key is None or pos_key.purpose != "pos" or terminal is None
             or not terminal.active or pos_key.terminal_id != terminal.id
             or not verify_pos_signer(request, pos_key.public_key_b64, pos_key.key_id,
                                      pos_key.fingerprint, terminal.merchant_id, terminal.id)):
@@ -125,16 +165,24 @@ def _validate(db, request, grant, grant_wire, receipt, ack_wire):
             or authorization.wallet_id != wallet.id or commitment.wallet_id != wallet.id
             or commitment.authorization_envelope != grant_wire):
         raise ValueError("authorization")
+    wallet_key = db.get(models.RegisteredKey, grant.payload["wallet_key_id"])
+    if (wallet_key is None or wallet_key.wallet_id != wallet.id or wallet_key.purpose != "wallet"
+            or wallet_key.fingerprint != grant.payload["wallet_key_fingerprint"]
+            or wallet_key.public_key_b64 != grant.payload["wallet_public_key_b64"]):
+        raise ValueError("wallet key")
+    review = requires_review(pos_key, parse_timestamp(request.payload["issued_at"]))
+    review = review or requires_review(wallet_key, parse_timestamp(receipt.payload["confirmed_at"]))
     if ack_wire is not None:
         ack = parse_signed_envelope(ack_wire)
         validate_ack_binding(request, receipt, ack)
         if not verify_pos_signer(ack, pos_key.public_key_b64, pos_key.key_id,
                                  pos_key.fingerprint, terminal.merchant_id, terminal.id):
             raise ValueError("ack")
+        review = review or requires_review(pos_key, parse_timestamp(ack.payload["accepted_at"]))
     merchant_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == terminal.merchant_user_id).one_or_none()
     if merchant_wallet is None:
         raise ValueError("merchant wallet")
-    return wallet, merchant_wallet, terminal, authorization, commitment
+    return wallet, merchant_wallet, terminal, authorization, commitment, review
 
 
 def _apply(db, payment, wallet, merchant_wallet, authorization, commitment, issuance_index):

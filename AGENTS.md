@@ -67,3 +67,13 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 ## Plan correctivo vigente
 
 La auditoría R01–R34 invalida el cierre integral previo. El contrato y las rutas v3, compromisos, cierres, resoluciones firmadas, recargas simuladas idempotentes y controles de webhook están programados; las rutas mutantes heredadas responden retirada explícita. La conciliación v2 exige inventario histórico previo, cuya ventana está deshabilitada por defecto. La validación integral posterior continúa pendiente. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar API, concurrencia, migraciones, POS o hardware como comprobados mientras no se ejecuten.
+
+## Corte C8 para prueba manual
+
+- Entorno adicional `.venv313`: CPython 3.13.13 x64 y dependencias fijadas en `requirements-manual.lock`, incluido pyscard 2.3.1. No eliminar el entorno anterior.
+- Sintaxis de 53 archivos Python comprobada mediante AST, sin importar ni arrancar la aplicación. No suites, Qt, PC/SC ni simuladores ejecutados.
+- `registered_keys.revoked_at` es aditivo. Evidencia v3 emitida antes de la fecha efectiva puede conciliarse; la posterior o con fecha desconocida queda en revisión. Rechazos históricos ambiguos v2 no liberan reservas automáticamente.
+- `ISSUER_TRUST_PATH` apunta a inventario público externo fijado por ID/huella. Conservar emisores públicos anteriores; identidad privada activa permanece DPAPI fuera de Git.
+- POS migra 4→5 para confianza emisora persistida. Nunca ejecutar esa migración sobre bases originales como comprobación incidental.
+- `tools.prepare_demo` crea solo un directorio externo nuevo; `tools.run_demo` carga configuración DPAPI y prepara arranque/compilación/túnel por acción explícita del usuario. Estas herramientas no se ejecutaron durante C8.
+- Seguir `GUIA_PRUEBA_MANUAL.md`. APK necesita URL HTTPS e identidad externa correspondientes; el túnel ngrok se abre manualmente, no al importar backend.

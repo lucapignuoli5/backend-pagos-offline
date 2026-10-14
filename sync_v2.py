@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from clock import utc_now
+from revocation import requires_review
 from auth import get_current_user
 from database import get_db
 from protocol_v2 import (
@@ -84,6 +85,8 @@ def process_evidence_core(
 
         if existing is not None and existing.state in {"ACCEPTED", "REJECTED"}:
             _authorize_participant(db, user, existing.wallet_id, existing.terminal_id)
+            if existing.state == "REJECTED":
+                return _result(operation_id, "CONFLICT", "HISTORICAL_REJECTION_REQUIRES_REVIEW")
             return _result(operation_id, existing.state, existing.rejection_code)
 
         context = _validate_evidence(db, request, receipt, ack_wire)
@@ -127,7 +130,7 @@ def process_evidence_core(
         raise
     except (ProtocolError, ValueError, TypeError, KeyError, binascii.Error):
         db.rollback()
-        return _result(operation_id, "REJECTED", "INVALID_EVIDENCE")
+        return _result(operation_id, "CONFLICT", "LEGACY_EVIDENCE_REQUIRES_REVIEW")
     except IntegrityError:
         db.rollback()
         concurrent = db.get(models.OfflinePaymentV2, operation_id)
@@ -168,22 +171,27 @@ def _validate_evidence(db: Session, request, receipt, ack_wire: bytes | None) ->
         raise ValueError("request digest")
 
     pos_key = db.get(models.RegisteredKey, request.payload["pos_key_id"])
-    if pos_key is None or pos_key.revoked or pos_key.purpose != "pos" or pos_key.fingerprint != request.payload["pos_key_fingerprint"]:
+    if pos_key is None or pos_key.purpose != "pos" or pos_key.fingerprint != request.payload["pos_key_fingerprint"]:
         raise ValueError("pos key")
     terminal = db.get(models.Terminal, request.payload["terminal_id"])
     if terminal is None or not terminal.active or pos_key.terminal_id != terminal.id or terminal.merchant_id != request.payload["merchant_id"]:
         raise ValueError("terminal")
     if not request.verify(pos_key.public_key_b64):
         raise ValueError("request signature")
+    if requires_review(pos_key, _parse_timestamp(request.payload["issued_at"])):
+        raise ValueError("historical POS revocation")
 
     wallet = db.get(models.Wallet, receipt.payload["wallet_id"])
     wallet_key = db.get(models.RegisteredKey, receipt.payload["wallet_key_id"])
-    if wallet is None or wallet_key is None or wallet_key.revoked or wallet_key.purpose != "wallet":
+    if wallet is None or wallet_key is None or wallet_key.purpose != "wallet":
         raise ValueError("wallet key")
     if wallet_key.wallet_id != wallet.id or wallet_key.fingerprint != receipt.payload["wallet_key_fingerprint"]:
         raise ValueError("wallet key scope")
     if not receipt.verify(wallet_key.public_key_b64):
         raise ValueError("receipt signature")
+    # V2 has no confirmed_at: a revoked wallet signer has ambiguous issuance evidence.
+    if wallet_key.revoked:
+        raise ValueError("historical wallet revocation requires review")
 
     authorization = db.get(models.OfflineAuthorization, receipt.payload["offline_authorization_id"])
     if authorization is None or authorization.wallet_id != wallet.id or authorization.wallet_key_id != wallet_key.key_id:
@@ -215,8 +223,10 @@ def _validate_evidence(db: Session, request, receipt, ack_wire: bytes | None) ->
         if ack.payload["receipt_digest"] != payload_digest(receipt.payload):
             raise ValueError("receipt digest")
         ack_key = db.get(models.RegisteredKey, ack.payload["pos_key_id"])
-        if ack_key is None or ack_key.revoked or ack_key.key_id != pos_key.key_id:
+        if ack_key is None or ack_key.key_id != pos_key.key_id:
             raise ValueError("ack key")
+        if requires_review(ack_key, _parse_timestamp(ack.payload["accepted_at"])):
+            raise ValueError("historical ack revocation")
         if ack_key.fingerprint != ack.payload["pos_key_fingerprint"] or not ack.verify(ack_key.public_key_b64):
             raise ValueError("ack signature")
 

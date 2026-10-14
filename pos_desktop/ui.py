@@ -189,7 +189,10 @@ class PosWindow(QMainWindow):
             return
         self._run(
             lambda: self.service.collect_receipt(self.operation_id),
-            lambda state: self.wait_status.setText(f"Aceptación local persistida: {state}"),
+            lambda state: self.wait_status.setText(
+                "Aceptación local persistida; conciliación pendiente"
+                if state == "LOCALLY_ACCEPTED" else f"Sin aceptación: {state}"
+            ),
             self.wait_status,
         )
 
@@ -237,10 +240,14 @@ class PosWindow(QMainWindow):
             self.sync_status.setText("La operación ya no está disponible")
             return
         if operation.state == "REQUEST_CREATED":
-            self.wait_status.setText("Solicitud recuperada; acerque el teléfono para enviarla")
+            self._run(
+                lambda: self.service.deliver_request(operation.operation_id),
+                lambda state: self.wait_status.setText(f"Solicitud recuperada: {state}; confirme en Android"),
+                self.wait_status,
+            )
         elif operation.state in {"REQUEST_DELIVERED", "WAITING_CONFIRMATION"}:
             self.wait_status.setText("Solicitud recuperada; complete el segundo acercamiento")
-        elif operation.state == "LOCALLY_ACCEPTED" and operation.ack_envelope is not None:
+        elif operation.ack_envelope is not None:
             self.wait_status.setText("Aceptación recuperada; acerque el teléfono para reenviar el acuse")
         else:
             self.wait_status.setText(f"Operación recuperada en estado {operation.state}")
