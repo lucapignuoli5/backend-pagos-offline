@@ -200,3 +200,40 @@ class LedgerEntry(Base):
     entry_type: Mapped[str] = mapped_column(String(20), nullable=False)
     delta_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class OfflineCommitment(Base):
+    __tablename__ = "offline_commitments"
+    __table_args__ = (
+        CheckConstraint("reserved_cents >= 0", name="ck_commitment_reserved_nonnegative"),
+        CheckConstraint("emitted_cents >= 0", name="ck_commitment_emitted_nonnegative"),
+    )
+
+    authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), primary_key=True)
+    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    reserved_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    emitted_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    emitted_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    closure_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
+    authorization_envelope: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CommitmentEmission(Base):
+    __tablename__ = "offline_commitment_emissions"
+    __table_args__ = (UniqueConstraint("authorization_id", "operation_id", name="uq_commitment_operation"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), nullable=False, index=True)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PaymentResolution(Base):
+    __tablename__ = "offline_payment_resolutions"
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    resolution_envelope: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

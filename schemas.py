@@ -190,3 +190,34 @@ class OfflinePaymentStatusResponse(BaseModel):
     operation_id: str
     status: str
     code: Optional[str] = None
+
+
+class OfflineAuthorizationV3Request(BaseModel):
+    wallet_id: str = Field(..., min_length=1, max_length=120)
+    wallet_key_id: str = Field(..., min_length=1, max_length=120)
+    max_payment_cents: int = Field(..., strict=True, gt=0)
+    max_payments: int = Field(..., strict=True, gt=0)
+
+
+class OfflineAuthorizationV3Response(BaseModel):
+    authorization_id: str
+    wallet_id: str
+    authorized_total_cents: int
+    authorization_envelope_b64: str
+    issued_at: datetime
+    spend_expires_at: datetime
+
+
+class OfflineCommitmentResponse(BaseModel):
+    authorization_id: str
+    reserved_cents: int
+    emitted_cents: int
+    emitted_count: int
+    closed: bool
+
+class OfflineAuthorizationCloseRequest(BaseModel):
+    close_envelope_b64: str = Field(..., min_length=1, max_length=8192)
+    manifest_b64: str = Field(..., min_length=1, max_length=8192)
+
+class PaymentResolutionRequest(BaseModel):
+    resolution_envelope_b64: str = Field(..., min_length=1, max_length=8192)

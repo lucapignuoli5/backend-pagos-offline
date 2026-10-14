@@ -26,6 +26,7 @@ except ImportError:  # La integracion es opcional y esta deshabilitada por defec
 import models
 import schemas
 from api_v2 import router as api_v2_router
+from api_v3 import router as api_v3_router
 from auth import LoginThrottle, create_access_token
 from sync_v2 import router as sync_v2_router
 from crypto_utils import verify_payment_contract_signature
@@ -153,6 +154,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_v2_router)
+app.include_router(api_v3_router)
 app.include_router(sync_v2_router)
 
 @app.exception_handler(RequestValidationError)

@@ -428,3 +428,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** sin dispositivos móviles ni lectores físicos.
 - **Commit:** `feat(sync): [TFG-C2-BE-02] admitir conciliacion tardia e idempotencia estricta`
 - **Impacto académico:** demuestra la naturaleza desconectada del sistema, permitiendo que la evidencia offline sea acreditada al recuperar conectividad sin importar la demora de sincronización, siempre que el pago fuera válido al emitirse.
+
+## TFG-C2-BE-03 — API v3, compromisos y cierre verificable
+
+- **Fecha:** 2026-10-14
+- **Fase:** C2
+- **Estado:** PARCIAL
+- **Hallazgos:** R02, R03, R04, R05, R09, R12, R18, R20.
+- **Anterior:** C2 corregía rutas y conciliación v2, pero todavía no exponía el contrato v3 ni persistía el compromiso, cierre firmado y resolución final.
+- **Nuevo previsto:** API v3 con autorización/cierre/resolución firmados, presupuesto por billetera, estados de envío separados y evidencia histórica controlada.
+- **Decisión:** agregar tablas y migraciones aditivas; no modificar ni recalcular datos históricos existentes.
+- **Archivos:** `models.py`, `schemas.py`, `api_v3.py`, `main.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** nuevas tablas v3; datos v2 conservados byte a byte.
+- **Pruebas:** `py_compile` correcto y `git diff --check` limpio; falta ejecutar pruebas HTTP aisladas sobre una base temporal.
+- **Limitaciones:** no habilitar pagos reales ni integración Mercado Pago; la resolución final está persistida y la deduplicación usa una restricción por autorización/operación, pero falta evidencia HTTP/concurrente antes del cierre.
+- **Commit:** `feat(api): [TFG-C2-BE-03] incorporar compromisos y cierre v3` (`ca23bac`).
+- **Impacto académico:** demostrar contabilidad y recuperación v3, separadas de la compatibilidad histórica v2.
