@@ -377,3 +377,20 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** conexión a persistencia y transportes se completa en C2–C5.
 - **Commit:** `feat(protocol): [TFG-C1-BE-01] definir mensajes v3 verificables`
 - **Impacto académico:** contrato nuevo; no se atribuye flujo integrado ni hardware hasta sus pruebas.
+
+
+## TFG-C1-BE-02 — Proteger la clave emisora fuera del repositorio
+
+- **Fecha:** 2026-10-14
+- **Fase:** C1
+- **Estado:** COMPROBADO
+- **Hallazgos:** R02, R09 y configuración R31.
+- **Anterior:** no existe emisor de autorizaciones verificables.
+- **Nuevo previsto:** identidad emisora P-256 cifrada mediante DPAPI, con huella fijada externamente y creación explícita sin sobrescritura.
+- **Decisión:** leer ruta externa; nunca generar otra identidad silenciosamente ni almacenar claves privadas en Git.
+- **Archivos:** `issuer_keys.py`, `tests/test_issuer_keys.py`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** firma de mensajes v3; sin bases existentes.
+- **Pruebas:** 2 pruebas unitarias en `tests/test_issuer_keys.py` ejecutadas dentro de la suite segura aislada de 61 pruebas (`tools/safe_tests.py --legacy-clock`); verifican creación con DPAPI, prohibición de sobrescritura, pin de huella SHA-256 de 64 caracteres hex y rechazo explícito si la ruta de identidad privada está dentro de cualquier repositorio Git.
+- **Limitaciones:** protección local por usuario Windows, no acredita hardware confiable ni gestión comercial de claves.
+- **Commit:** `feat(keys): [TFG-C1-BE-02] proteger emisor externo v3`
+- **Impacto académico:** explicitar confianza en el emisor y límites de protección local.
