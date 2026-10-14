@@ -25,6 +25,5 @@ def verify_payment_contract_signature(
         )
         return True
 
-    except (InvalidSignature, ValueError, TypeError) as e:
-        print(f"Error de verificación criptográfica: {e}")
+    except (InvalidSignature, ValueError, TypeError):
         return False

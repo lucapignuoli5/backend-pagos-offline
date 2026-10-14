@@ -88,6 +88,23 @@ class TransaccionOfflineDB(Base):
     )
 
 
+class ExternalPaymentEvent(Base):
+    __tablename__ = "external_payment_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_payment_id", name="uq_external_payment_provider_id"),
+        CheckConstraint("amount_cents > 0", name="ck_external_payment_amount_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_payment_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(120), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Wallet(Base):
     __tablename__ = "wallets"
     __table_args__ = (

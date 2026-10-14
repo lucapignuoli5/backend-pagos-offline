@@ -276,3 +276,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se inicia la API, no se usan bases existentes ni servicios externos; hardware pendiente.
 - **Commit:** `docs(review): [TFG-F5-RV-01] cerrar conciliacion independiente`
 - **Impacto académico:** fija la evidencia que habilita la adaptación de QR/TCP sin sobredimensionar el resultado.
+
+## TFG-F6-BE-01 — Aislar e idempotentizar recargas externas
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos secundarios e integraciones
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el webhook opcional podía acreditar repetidamente el mismo pago y el código heredado imprimía payloads, huellas y datos de operaciones.
+- **Comportamiento anterior:** cada notificación aprobada sumaba saldo sin un identificador durable y se emitían trazas sensibles de firmas y comprobantes.
+- **Comportamiento nuevo:** cada pago aprobado se registra por proveedor e identificador antes de acreditar; una repetición idéntica devuelve `duplicate`, un contenido distinto devuelve conflicto y usuario/billetera se actualizan en la misma transacción. Se eliminaron trazas heredadas de payloads, firmas, huellas y operaciones.
+- **Decisión:** conservar Mercado Pago deshabilitado por defecto, registrar cada pago del proveedor con unicidad y probarlo solo con un SDK simulado.
+- **Archivos:** `models.py`, `main.py`, `crypto_utils.py`, `tests/test_mercadopago.py`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** webhook opcional, tabla `external_payment_events`, saldo heredado y saldo confirmado v2.
+- **Pruebas:** 33 pruebas `unittest` correctas en bases temporales; el SDK simulado repite el mismo webhook y acredita una sola vez, y el mismo ID con otro importe devuelve conflicto sin una segunda acreditación.
+- **Limitaciones:** no se usarán credenciales ni servicios reales.
+- **Commit:** `fix(integration): [TFG-F6-BE-01] hacer idempotente el webhook simulado`
+- **Impacto académico:** delimita la recarga externa como integración opcional y separada del pago offline.

@@ -30,9 +30,10 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 
 - La API v2 dispone de login JWT, registro de claves con prueba de posesión, autorizaciones offline, consulta de saldo, sincronización por resultado y consulta por operación.
 - La contabilidad v2 usa importes enteros en centavos, evidencia exacta, asientos únicos, actualización condicionada de saldo y estados idempotentes; las rutas heredadas no aplican movimientos v2.
-- La suite actual ejecuta 31 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto, ambos órdenes de conciliación y reintento del aprovisionamiento.
+- La suite actual ejecuta 33 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback, duplicados, conflicto, clave revocada, lote mixto, ambos órdenes de conciliación, reintento del aprovisionamiento y webhook externo simulado.
 - Android y POS tienen colas durables independientes que envían la misma evidencia y aplican cada resultado; el backend conserva una única aplicación contable aunque llegue primero cualquiera de los dos.
 - Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio está implementado con SQLite, DPAPI, PySide6, adaptadores PC/SC/simulador y pruebas del flujo completo simulado; no existe todavía evidencia con ACR122U.
+- Mercado Pago permanece deshabilitado por defecto; el webhook registra de forma única cada pago externo y sus pruebas usan exclusivamente un SDK simulado.
 
 ## Estado del POS verificado al 14/10/2026
 

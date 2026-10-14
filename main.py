@@ -4,7 +4,6 @@ import binascii
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from hashlib import sha256
 from html import escape
 import os
 import re
@@ -283,31 +282,101 @@ async def mp_webhook(request: Request, db: DbSession):
             detail="Integracion de pagos externos deshabilitada",
         )
     body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="Notificacion invalida")
     topic = request.query_params.get("topic") or body.get("type") or body.get("action")
-    payment_id = request.query_params.get("id") or body.get("data", {}).get("id")
+    notification_data = body.get("data")
+    body_payment_id = notification_data.get("id") if isinstance(notification_data, dict) else None
+    payment_id = request.query_params.get("id") or body_payment_id
 
     if topic in ["payment", "payment.created", "payment.updated"] and payment_id:
-        payment_info = mp_sdk.payment().get(payment_id)
+        payment_identifier = str(payment_id)
+        if not 1 <= len(payment_identifier) <= 120:
+            raise HTTPException(status_code=422, detail="Identificador de pago invalido")
+        payment_info = mp_sdk.payment().get(payment_identifier)
+        if not isinstance(payment_info, dict):
+            raise HTTPException(status_code=502, detail="Respuesta externa invalida")
 
-        if payment_info["status"] == 200:
+        if payment_info.get("status") == 200 and isinstance(payment_info.get("response"), dict):
             payment = payment_info["response"]
 
-            if payment["status"] == "approved":
+            if payment.get("status") == "approved":
                 external_ref = payment.get("external_reference")
-                monto = Decimal(str(payment.get("transaction_amount")))
+                if not isinstance(external_ref, str) or not 1 <= len(external_ref) <= 120:
+                    raise HTTPException(status_code=422, detail="Referencia externa invalida")
+                try:
+                    amount = Decimal(str(payment.get("transaction_amount")))
+                except Exception as exc:
+                    raise HTTPException(status_code=422, detail="Importe externo invalido") from exc
+                cents_value = amount * Decimal("100")
+                if not amount.is_finite() or amount <= 0 or cents_value != cents_value.to_integral_value():
+                    raise HTTPException(status_code=422, detail="Importe externo invalido")
+                amount_cents = int(cents_value)
 
-                if external_ref:
-                    cliente = (
-                        db.query(models.User)
-                        .filter(func.lower(models.User.nombre) == external_ref.lower())
-                        .first()
+                user = (
+                    db.query(models.User)
+                    .filter(func.lower(models.User.nombre) == external_ref.lower())
+                    .first()
+                )
+                if user is None:
+                    raise HTTPException(status_code=404, detail="Usuario de recarga no encontrado")
+                wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user.id).first()
+                if wallet is None:
+                    raise HTTPException(status_code=409, detail="Billetera de recarga no disponible")
+
+                existing = _external_payment_event(db, payment_identifier)
+                if existing is not None:
+                    if _same_external_payment(existing, external_ref, user.id, amount_cents):
+                        return {"status": "ok", "result": "duplicate"}
+                    raise HTTPException(status_code=409, detail="Pago externo ya registrado con otro contenido")
+
+                db.add(
+                    models.ExternalPaymentEvent(
+                        provider="mercadopago",
+                        provider_payment_id=payment_identifier,
+                        external_reference=external_ref,
+                        user_id=user.id,
+                        amount_cents=amount_cents,
+                        status="APPLIED",
                     )
-                    if cliente:
-                        cliente.saldo_real += monto
-                        db.commit()
-                        print(f"✅ WEBHOOK MP: Se sumaron ${monto} a {cliente.nombre}")
+                )
+                try:
+                    db.flush()
+                    user.saldo_real += amount
+                    wallet.confirmed_balance_cents += amount_cents
+                    db.commit()
+                except IntegrityError as exc:
+                    db.rollback()
+                    existing = _external_payment_event(db, payment_identifier)
+                    if existing is not None and _same_external_payment(
+                        existing, external_ref, user.id, amount_cents
+                    ):
+                        return {"status": "ok", "result": "duplicate"}
+                    raise HTTPException(status_code=409, detail="Pago externo duplicado") from exc
+                return {"status": "ok", "result": "applied"}
 
-    return {"status": "ok"}
+    return {"status": "ok", "result": "ignored"}
+
+
+def _external_payment_event(db: Session, payment_id: str) -> models.ExternalPaymentEvent | None:
+    return db.query(models.ExternalPaymentEvent).filter(
+        models.ExternalPaymentEvent.provider == "mercadopago",
+        models.ExternalPaymentEvent.provider_payment_id == payment_id,
+    ).first()
+
+
+def _same_external_payment(
+    event: models.ExternalPaymentEvent,
+    external_reference: str,
+    user_id: int,
+    amount_cents: int,
+) -> bool:
+    return (
+        event.external_reference.casefold() == external_reference.casefold()
+        and event.user_id == user_id
+        and event.amount_cents == amount_cents
+        and event.status == "APPLIED"
+    )
 
 
 @app.post("/verify-signature", response_model=schemas.SignatureVerificationResponse)
@@ -424,9 +493,6 @@ def sync_offline_payments(
 
     for transaccion in transacciones:
         if _transaccion_ya_existe(transaccion.id_transaccion, db):
-            print(
-                f"Seguridad: transaccion duplicada detectada para {transaccion.id_transaccion}"
-            )
             resultados.append(
                 schemas.OfflinePaymentSyncResult(
                     id_transaccion=transaccion.id_transaccion,
@@ -557,20 +623,11 @@ def _render_fila_dashboard(transaccion: models.TransaccionOfflineDB) -> str:
 
 def _validar_firma_criptografica(transaccion: schemas.OfflinePaymentSyncItem) -> None:
     payload_str = transaccion.payload_original or _payload_firmado(transaccion)
-    print(f"DEBUG BACKEND - String a verificar: '{payload_str}'")
-    print(
-        "DEBUG BACKEND - SHA256 string UTF-8: "
-        f"{sha256(payload_str.encode('utf-8')).hexdigest()}"
-    )
     if not verify_payment_contract_signature(
         payload_str=payload_str,
         signature_b64=transaccion.firma,
         public_key_b64=transaccion.clave_publica,
     ):
-        print(
-            "ADVERTENCIA: firma criptografica invalida para "
-            f"transaccion {transaccion.id_transaccion}"
-        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Firma criptografica invalida",
@@ -612,15 +669,8 @@ def verificar_firma(public_key_b64: str, firma_b64: str, datos_originales: str) 
         public_key_bytes = _decodificar_base64_android(public_key_b64)
         firma_bytes = _decodificar_base64_android(firma_b64)
         public_key = serialization.load_der_public_key(public_key_bytes)
-    except (ValueError, TypeError, binascii.Error) as exc:
-        print(f"DEBUG BACKEND - Error decodificando clave/firma: {exc}")
+    except (ValueError, TypeError, binascii.Error):
         return False
-
-    print(
-        "DEBUG BACKEND - Clave: "
-        f"{public_key.__class__.__name__}, firma_bytes={len(firma_bytes)}, "
-        f"public_key_sha256={sha256(public_key_bytes).hexdigest()}"
-    )
 
     datos_bytes = datos_originales.encode("utf-8")
 
@@ -632,7 +682,6 @@ def verificar_firma(public_key_b64: str, firma_b64: str, datos_originales: str) 
                     return True
                 except InvalidSignature:
                     continue
-            print("DEBUG BACKEND - ECDSA: la firma no coincide con el string verificado")
             return False
 
         if isinstance(public_key, rsa.RSAPublicKey):
@@ -644,10 +693,8 @@ def verificar_firma(public_key_b64: str, firma_b64: str, datos_originales: str) 
             )
             return True
     except (InvalidSignature, ValueError):
-        print("DEBUG BACKEND - RSA: la firma no coincide con el string verificado")
         return False
 
-    print("DEBUG BACKEND - Tipo de clave publica no soportado")
     return False
 
 
