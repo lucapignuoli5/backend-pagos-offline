@@ -482,3 +482,13 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** compilación, suites, lint, instrumentadas y hardware quedan agrupados para validación posterior.
 - **Commit:** `refactor(env): [TFG-C6-BE-01] centralizar reloj verificable`
+## TFG-C7-DOC-01 — Consolidación sin atribuir pruebas nuevas
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** el informe académico independiente y el registro consolidado distinguen implementación C2–C6 de evidencia ejecutada; se actualizan instrucciones sin modificar entregas históricas.
+- **Archivos:** registros académicos, `AGENTS.md` general y de las áreas.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** matriz de validación, benchmark completo, instrumentadas y hardware quedan para la ejecución agrupada posterior.
+- **Commit:** `docs(plan): [TFG-C7-DOC-01] consolidar implementacion pendiente de validar`
