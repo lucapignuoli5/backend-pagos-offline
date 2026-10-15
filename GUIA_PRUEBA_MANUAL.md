@@ -18,6 +18,12 @@ Los comandos de preparación y arranque siguientes los ejecuta el usuario.
   para actualizar las claves. Ambos teléfonos en la misma Wi-Fi; cobro QR de $10.
 - No se ejecutaron servidor, túnel, pagos ni pruebas al preparar esta entrega.
 
+El launcher incorpora consola de eventos en vivo: login, autorización, recarga y
+conciliación por operación. También guarda backend.log. Presionar Enter y volver
+a abrir INICIAR_DEMO.cmd para cargar cambios del servidor. No requiere reinstalar
+el APK. Los pagos locales sin Internet aparecerán al sincronizar; no se imprimen
+contraseñas, JWT, claves o sobres firmados.
+
 ## Preparación única
 
 Desde este repositorio, usar el entorno nuevo `.venv313` (CPython 3.13 x64).

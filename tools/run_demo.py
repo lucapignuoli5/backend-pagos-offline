@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 from urllib.parse import urlparse
 
 
@@ -18,7 +19,13 @@ def main():
     directory = args.directory.resolve()
     config = json.loads(WindowsDpapiProtector().unprotect((directory / "config.dpapi").read_bytes()))
     environment = dict(os.environ, **config)
+    environment["PYTHONUNBUFFERED"] = "1"
+    environment["PYTHONIOENCODING"] = "utf-8"
     source = Path(__file__).resolve().parents[1]
+    backend_command = [
+        sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000",
+        "--no-access-log", "--log-config", str(source / "demo_log_config.json"),
+    ]
     if args.mode in {"tunnel", "start"}:
         from getpass import getpass
         from pyngrok import ngrok
@@ -47,14 +54,24 @@ def main():
         options = {"domain": domain} if domain else {}
         backend = None
         log = None
+        relay = None
         try:
             if args.mode == "start":
                 log = (directory / "backend.log").open("a", encoding="utf-8")
                 backend = subprocess.Popen(
-                    [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
-                    cwd=source, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                    backend_command,
+                    cwd=source, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace", bufsize=1,
                     stdin=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW,
                 )
+                def show_events():
+                    for line in backend.stdout:
+                        log.write(line)
+                        log.flush()
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+                relay = threading.Thread(target=show_events, daemon=True)
+                relay.start()
             tunnel = ngrok.connect(addr="http://127.0.0.1:8000", proto="http",
                                    bind_tls=True, pyngrok_config=tunnel_config, **options)
             url = tunnel.public_url
@@ -69,7 +86,10 @@ def main():
             print("URL HTTPS guardada en la configuracion local:", url)
             print("Mantenga esta ventana abierta durante el login y la sincronizacion.")
             print("El APK debe usar esta misma URL. El pago QR requiere ambos telefonos en la misma Wi-Fi.")
-            input("Enter para cerrar la demostracion: ")
+            print("Consola en vivo: login, autorizaciones, recargas y conciliacion.")
+            print("Pagos offline entre telefonos aparecen aqui al sincronizar, no durante el intercambio local.")
+            print("Presione Enter para cerrar la demostracion.")
+            input()
         finally:
             # Dedicated executable path: do not stop an unrelated ngrok process.
             try:
@@ -78,6 +98,9 @@ def main():
                 if backend is not None:
                     backend.terminate()
                     backend.wait()
+                    if relay is not None:
+                        relay.join(timeout=5)
+                    backend.stdout.close()
                 if log is not None:
                     log.close()
         return
@@ -95,7 +118,7 @@ def main():
         command = [str(android / "gradlew.bat"), ":app:assembleDebug", ":app:assembleDebugAndroidTest", "--console=plain"]
         cwd = android
     elif args.mode == "backend":
-        command = [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"]
+        command = backend_command
         cwd = source
     else:
         command = [sys.executable, "-m", "pos_desktop.app"]

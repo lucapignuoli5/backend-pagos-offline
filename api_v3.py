@@ -20,6 +20,7 @@ from database import get_db
 from issuer_keys import IssuerIdentity
 from protocol_v3 import parse_signed_envelope, payload_digest, validate_close_manifest, verify_authorization
 from sync_v3 import process_evidence_v3
+from demo_events import event
 from issuer_trust import issuer_public_key, verify_trusted_authorization
 from settings import LEGACY_INVENTORY_OPEN, MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
@@ -88,6 +89,8 @@ def simulated_topup_v3(
                 or existing.amount_cents != request.amount_cents):
             raise HTTPException(409, "request_id reutilizado con otro contenido")
         db.refresh(wallet)
+        event("RECARGA_REPETIDA_SIN_NUEVO_CREDITO", usuario_id=user.id,
+              billetera=wallet.id, centavos=existing.amount_cents)
         return schemas.SimulatedTopupResponse(
             request_id=existing.request_id, wallet_id=existing.wallet_id,
             amount_cents=existing.amount_cents,
@@ -113,6 +116,8 @@ def simulated_topup_v3(
                 or existing.amount_cents != request.amount_cents):
             raise HTTPException(409, "Recarga simulada conflictiva") from exc
     db.refresh(wallet)
+    event("RECARGA_SIMULADA_CONFIRMADA", usuario_id=user.id,
+          billetera=wallet.id, centavos=request.amount_cents)
     return schemas.SimulatedTopupResponse(
         request_id=request.request_id, wallet_id=wallet.id,
         amount_cents=request.amount_cents,
@@ -197,6 +202,8 @@ def issue_authorization_v3(
         if previous is None:
             raise HTTPException(409, "No se pudo emitir la autorizacion") from exc
         return _repeat_authorization(db, previous, request)
+    event("AUTORIZACION_OFFLINE_EMITIDA", usuario_id=user.id,
+          billetera=wallet.id, autorizacion=auth_id, centavos=total, cantidad=request.max_payments)
     return schemas.OfflineAuthorizationV3Response(authorization_id=auth_id, wallet_id=wallet.id,
         authorized_total_cents=total, authorization_envelope_b64=base64.b64encode(signed).decode("ascii"),
         issued_at=now, spend_expires_at=expires)
@@ -271,14 +278,20 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
         models.OfflineAuthorization.id == authorization_id
     ).values(active=False))
     db.commit()
+    event("AUTORIZACION_CERRADA", usuario_id=user.id, autorizacion=authorization_id)
     return db.get(models.OfflineCommitment, authorization_id)
 
 
 @router.post("/offline-payments/sync", response_model=schemas.OfflinePaymentSyncV3Response)
 def sync_v3(request: schemas.OfflinePaymentSyncV3Request, db: DbSession, user: CurrentUser):
-    return schemas.OfflinePaymentSyncV3Response(
-        results=[process_evidence_v3(db, user, evidence) for evidence in request.operations]
-    )
+    results = []
+    for evidence in request.operations:
+        result = process_evidence_v3(db, user, evidence)
+        event("CONCILIACION", usuario_id=user.id, operacion=result.operation_id,
+              envio=result.submission_status, estado=result.operation_status,
+              definitivo=result.final, codigo=result.code)
+        results.append(result)
+    return schemas.OfflinePaymentSyncV3Response(results=results)
 
 
 @router.post("/offline-payments/{operation_id}/resolution")
@@ -373,6 +386,7 @@ def _repeat_authorization(db: Session, previous: models.OfflineAuthorization,
     )
     if not same:
         raise HTTPException(409, "request_id reutilizado con otro contenido")
+    event("AUTORIZACION_REUTILIZADA", billetera=previous.wallet_id, autorizacion=previous.id)
     return schemas.OfflineAuthorizationV3Response(
         authorization_id=previous.id, wallet_id=previous.wallet_id,
         authorized_total_cents=commitment.reserved_cents,

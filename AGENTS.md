@@ -89,3 +89,10 @@ respondió 503 porque la ruta emisora recibida del entorno era str y se usaba co
 Path. C8-BE-03 normaliza ambos tipos en issuer_keys._external. AST correcto;
 la ejecución posterior requiere reiniciar la demostración. No recrear claves,
 cuentas o bases como solución a ese error.
+
+La consola C8-BE-04 muestra eventos operativos permitidos y retransmite stdout
+del backend al launcher conservando backend.log. No registrar cuerpos, headers,
+JWT, contraseñas, claves, nombres personales ni excepciones SQL parametrizadas.
+Un pago offline solo aparece en el servidor al sincronizar. La observación de
+eventos no acredita por sí sola un nuevo débito; distinguir aplicación tras commit
+de reintento/consulta. Verificación de esta unidad: solo AST y JSON.

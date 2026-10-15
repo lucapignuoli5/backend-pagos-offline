@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from clock import utc_now
+from demo_events import event
 from issuer_keys import IssuerIdentity
 from issuer_trust import verify_trusted_authorization
 from revocation import requires_review
@@ -260,6 +261,9 @@ def _apply(db, payment, wallet, merchant_wallet, authorization, commitment, issu
         resolution_envelope=resolution_wire, revision=1,
     ))
     db.commit()
+    event("PAGO_APLICADO_UNA_VEZ", operacion=payment.operation_id,
+          billetera=payment.wallet_id, comercio=payment.merchant_id,
+          terminal=payment.terminal_id, centavos=amount, estado="ACCEPTED")
     return _result(payment.operation_id, "VALIDATED", "ACCEPTED", True,
                    resolution=resolution_wire)
 

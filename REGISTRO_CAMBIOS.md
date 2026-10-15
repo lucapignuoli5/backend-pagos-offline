@@ -622,3 +622,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Verificación: AST correcto; sin importación de aplicación, suites ni solicitudes HTTP ejecutadas por el agente.
 - Despliegue: reiniciar la demostración para cargar el módulo corregido; APK y claves no se regeneran.
 - Commit: `fix(issuer): [TFG-C8-BE-03] aceptar rutas de configuracion externas`.
+## TFG-C8-BE-04 — Consola de eventos en vivo
+
+- Fecha: 2026-10-14. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Requisito: mostrar login, autorizaciones y conciliación en la ventana del launcher.
+- Límite: un servidor desconectado no observa pagos entre dispositivos hasta recibir sincronización.
+- Datos excluidos: contraseñas, JWT, cabeceras, cuerpos firmados, claves y nombres personales.
+- Implementación: stdout del backend se retransmite en vivo al CMD y se conserva en backend.log; logger con campos permitidos y formato seguro sin traza/parametrización SQL; rutas HTTP sin cuerpos/cabeceras ni direcciones personales.
+- Eventos: LOGIN_OK/LOGIN_RECHAZADO, autorización emitida/reutilizada/cerrada, recarga simulada/repetida, pago aplicado tras commit y resultado individual de conciliación. Un reintento no se anuncia como otro débito.
+- Archivos: demo_events.py, demo_log_config.json, main.py, api_v3.py, sync_v3.py, tools/run_demo.py, guía, instrucciones y registro.
+- Verificación: AST Python y JSON correctos; diff revisado. No pruebas, pagos ni reinicio de servicios ejecutados.
+- Uso: Enter y reabrir INICIAR_DEMO.cmd para cargar la consola nueva; no requiere otro APK.
+- Commit: `feat(console): [TFG-C8-BE-04] mostrar eventos seguros en vivo`.

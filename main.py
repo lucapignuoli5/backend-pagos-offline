@@ -31,6 +31,7 @@ from api_v2 import router as api_v2_router
 from api_v3 import router as api_v3_router
 from auth import LoginThrottle, create_access_token, get_current_user, require_role
 from sync_v2 import router as sync_v2_router
+from demo_events import event
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
 from migrations import backfill_wallets, run_schema_migrations
@@ -156,6 +157,20 @@ app.include_router(api_v2_router)
 app.include_router(api_v3_router)
 app.include_router(sync_v2_router)
 
+@app.middleware("http")
+async def operational_console(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception:
+        route = request.scope.get("route")
+        event("HTTP_ERROR", metodo=request.method,
+              ruta=getattr(route, "path", "ruta-no-identificada"), http=500)
+        raise
+    route = request.scope.get("route")
+    event("HTTP", metodo=request.method,
+          ruta=getattr(route, "path", "ruta-no-identificada"), http=response.status_code)
+    return response
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     safe_errors = [
@@ -217,6 +232,7 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
         password_valid = verify_password(payload.password, usuario.password_hash)
 
     if not password_valid:
+        event("LOGIN_RECHAZADO", codigo="CREDENCIALES_INVALIDAS")
         LOGIN_THROTTLE.fail(ip_throttle_key)
         LOGIN_THROTTLE.fail(identity_throttle_key)
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
@@ -224,6 +240,7 @@ def login_usuario(payload: schemas.LoginRequest, request: Request, db: DbSession
     LOGIN_THROTTLE.succeed(ip_throttle_key)
     LOGIN_THROTTLE.succeed(identity_throttle_key)
     token, expires_in = create_access_token(usuario)
+    event("LOGIN_OK", usuario_id=usuario.id, rol=usuario.role, billetera=f"wallet-{usuario.id}")
 
     return {
         "access_token": token,
