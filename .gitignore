@@ -37,4 +37,6 @@ dist/
 *.log
 *.tmp
 *.swp
+commitmsg.txt
+/ngrok.exe
 ._*

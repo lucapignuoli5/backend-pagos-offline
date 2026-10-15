@@ -96,3 +96,8 @@ JWT, contraseñas, claves, nombres personales ni excepciones SQL parametrizadas.
 Un pago offline solo aparece en el servidor al sincronizar. La observación de
 eventos no acredita por sí sola un nuevo débito; distinguir aplicación tras commit
 de reintento/consulta. Verificación de esta unidad: solo AST y JSON.
+
+Limpieza recuperable del 14/10/2026: temporales y auxiliares obsoletos archivados
+fuera del proyecto en C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01.
+Conservar ese archivo para recuperación; fuentes, bases, claves y APKs permanecen.
+No se ejecutaron pruebas ni se validó funcionamiento mediante esta limpieza.

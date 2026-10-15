@@ -634,3 +634,13 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Verificación: AST Python y JSON correctos; diff revisado. No pruebas, pagos ni reinicio de servicios ejecutados.
 - Uso: Enter y reabrir INICIAR_DEMO.cmd para cargar la consola nueva; no requiere otro APK.
 - Commit: `feat(console): [TFG-C8-BE-04] mostrar eventos seguros en vivo`.
+## TFG-C8-BE-05 — Limpieza recuperable de auxiliares y cachés
+
+- Fecha: 2026-10-14. Estado: COMPLETADA / RECUPERABLE.
+- Requisito: retirar temporales y archivos sin uso de la carpeta del proyecto.
+- Alcance: bytecode Python reproducible, mensaje auxiliar de commit, copia binaria ngrok sin consumidor actual y launcher antiguo reemplazado por la demo externa.
+- Protección: mover a archivo externo con manifiesto; conservar bases, Git, ambos entornos, herramientas, documentos y evidencia.
+- Resultado: cinco carpetas bytecode archivadas, commitmsg.txt y copia binaria ngrok.exe retirados del checkout; launcher antiguo ignorado archivado. Nueva regla Git evita rastrear esos auxiliares otra vez.
+- Archivo externo: `C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01`; manifiesto con rutas exactas. Herramientas actuales, ambos entornos, bases, fuentes y evidencia conservados.
+- Verificación: clasificación, rutas, estado Git y diff; sin pruebas ni arranque. El ngrok operativo está en TFG-Demo-Manual y no se modificó.
+- Commit: `chore(cleanup): [TFG-C8-BE-05] archivar auxiliares obsoletos`.
