@@ -1,110 +1,63 @@
-Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; las rutas siguientes parten de esta carpeta.
+Leer `../../AGENTS.md` y este archivo antes de trabajar. Backend/POS y Android son repositorios Git independientes.
 
-# Backend de pagos
+# Backend y POS — contexto vigente al 15/10/2026
 
-## Organización existente
+## Mapa y alcance
 
-- Aplicación Python/FastAPI con módulos planos; no imponer una nueva estructura por capas.
-- `main.py`: rutas, autenticación, recargas, integración Mercado Pago, dashboard y sincronización.
-- `schemas.py`: contratos Pydantic y validaciones de entrada y salida; mantenerlos coherentes con Android.
-- `models.py`: modelos SQLAlchemy; `database.py`: conexión SQLite, sesiones y dependencia de acceso a datos.
-- `crypto_utils.py`: verificación criptográfica de comprobantes; revisar también la verificación de firmas de `main.py`.
-- `requirements.txt` declara dependencias; no asumir que reproduce todo lo instalado en `venv/`.
-- Python/FastAPI es la base existente y documentada de la Entrega 4; consultar la raíz para decisiones sobre Go y sobre el POS de PC.
+- Python/FastAPI, Pydantic, SQLAlchemy y SQLite. Mantener convenciones de módulos existentes; no imponer una reestructuración general.
+- `main.py`: aplicación, login común, rutas históricas, integración opcional y consola. `api_v3.py`/`sync_v3.py`: autorizaciones, cierres, recargas simuladas, conciliación y resoluciones v3.
+- `api_v2.py`/`sync_v2.py`: registro/confianza/saldo compartidos y compatibilidad histórica. La presencia de rutas sin v3 no significa que un pago nuevo sea v2.
+- `schemas.py`, `models.py`, `database.py`, `migrations.py` y módulos criptográficos definen contratos, persistencia, evolución y confianza. Revisar productores y consumidores Android/POS antes de cambiarlos.
+- `pos_desktop/`: Python/PySide6, SQLite, DPAPI, adaptadores PC/SC y simulador. Persistencia en `pos_desktop/database.py`, versión 5; no confundir versión de esquema con versión de contrato.
+- El POS principal requiere Windows y ACR122U. El lector todavía no está disponible; la implementación y las simulaciones no acreditan interoperabilidad física.
+- Saldos y recargas simulados; no liquidación real ni certificación comercial. Mercado Pago opcional y deshabilitado por defecto.
 
-## Contratos y consistencia
+## Contratos y contabilidad a preservar
 
-- Antes de cambiar un DTO o ruta, revisar `../Prototipo Pagos Offline Android/app/src/main/java/com/example/prototipopagosoffline/network/`.
-- `/sync-offline-payments` recibe importes enteros en centavos y devuelve contadores y resultados individuales.
-- Una respuesta HTTP exitosa puede incluir operaciones fallidas; conservar la distinción entre aceptación del lote y de cada operación.
-- La integración prevista debe admitir envíos independientes de billetera y POS con el mismo ID; revisar autenticación de cada actor, duplicados y efectos contables antes de ampliar el contrato.
-- Revisar validación de importes positivos, límites, unidades y conversiones; hay caminos con Decimal y otros con float.
-- Comprobar correspondencia entre datos firmados y campos usados para aplicar el pago; no confiar en afirmaciones independientes del cliente.
-- Para firmas, contrastar identificador, payload original, UTF-8, representación Base64/DER y algoritmo con emisor y receptor Android.
-- Para persistencia, revisar alcance de commit/rollback, cambios de saldos, registro contable y comportamiento ante reintentos o duplicados.
-- Manejar errores conforme a los contratos existentes; no ocultar rechazos de una operación ni exponer detalles sensibles.
-- Son criterios de revisión; no afirmar que el código ya garantiza atomicidad, idempotencia o prevención completa del doble gasto.
-- Las rutas de Mercado Pago existentes no acreditan liquidación de pagos offline; la demostración acordada usa saldos y recargas simulados.
+- Pagos nuevos v3; evidencia v2 solo por inventario histórico controlado, cerrado por defecto. Conservar bytes, firmas, IDs, claves y movimientos antiguos.
+- `/sync-offline-payments` y otras rutas mutantes heredadas responden retirada explícita; no recomendarlas para operaciones nuevas. Conciliación actual: `/api/v3/offline-payments/sync`.
+- Revisar importes enteros en centavos, límites configurados, claves registradas, alcance, tiempos, nonce, índices, firmas sobre bytes originales y digests. No usar reconstrucciones para validar evidencia histórica.
+- Una respuesta HTTP 200 no acepta todo un lote. Distinguir submission_status, operation_status, final y resolución firmada por operación.
+- Reservas/compromisos se mantienen ante evidencia pendiente, contradictoria o entrega incierta. Vencimiento limita emisión, no libera automáticamente fondos pendientes ni impide conciliación tardía válida.
+- Preservar resultados finales e idempotencia; revisar transacciones, rollback, concurrencia y SQL condicionado antes de afirmar ausencia de doble contabilización.
+- Revocación con fecha efectiva y emisores públicos históricos fijados están implementados; eso no acredita todos los casos de seguridad. Identidad privada emisora externa protegida por DPAPI; nunca copiarla a Git ni logs.
+- Prevención completa del doble gasto entre comercios aislados sigue como riesgo residual del alcance académico.
 
-## Estado implementado verificado al 14/10/2026
+## Demostración y ejecución local
 
-- La API v2 dispone de login JWT, registro de claves con prueba de posesión, autorizaciones offline, consulta de saldo, sincronización por resultado y consulta por operación.
-- La contabilidad v2 usa importes enteros en centavos, evidencia exacta, asientos únicos, actualización condicionada de saldo y estados idempotentes; las rutas heredadas no aplican movimientos v2.
-- La suite actual ejecuta 41 pruebas sobre bases SQLite temporales, incluidas concurrencia, rollback en varios puntos, duplicados, conflicto, claves inválidas, terminal y ventana, nonce repetido, lote mixto, ambos órdenes de conciliación, cortes de transporte, webhook externo simulado y cálculo de métricas.
-- Android y POS tienen colas durables independientes que envían la misma evidencia y aplican cada resultado; el backend conserva una única aplicación contable aunque llegue primero cualquiera de los dos.
-- Estas pruebas no usan la base existente ni servicios de pago. El POS de escritorio está implementado con SQLite, DPAPI, PySide6, adaptadores PC/SC/simulador y pruebas del flujo completo simulado; no existe todavía evidencia con ACR122U.
-- Mercado Pago permanece deshabilitado por defecto; el webhook registra de forma única cada pago externo y sus pruebas usan exclusivamente un SDK simulado.
-- La revisión conjunta de Fase 6 repitió 33 pruebas backend y 24 JVM Android, compilación y lint; QR/TCP y lector NFC móvil usan v2, pero su ejecución física continúa pendiente.
-- La evidencia temporal disponible usa veinte repeticiones del transporte POS/HCE simulado en memoria; excluye confirmación humana y no acredita ACR122U, PC/SC, RF ni Android físico.
+- Entorno adicional `.venv313`: CPython 3.13.13 x64; `requirements-manual.lock`, incluido pyscard 2.3.1. Se conserva el entorno `venv`; no borrarlo ni instalar dependencias incidentalmente.
+- `tools.prepare_demo` crea exclusivamente un directorio externo nuevo. Demo existente: `C:\Users\anita\TFG-Demo-Manual`. No recrear base, cuentas, emisor ni configuración para solucionar fallos de conexión.
+- `tools.run_demo` carga configuración DPAPI por acción explícita. `INICIAR_DEMO.cmd` de la carpeta externa abre backend/ngrok; Enter los detiene. Dominio: `https://unfailing-bless-thrift.ngrok-free.dev/`.
+- `demo_access.py`: `/api/demo/device-login`, deshabilitado salvo DEMO_DEVICE_LOGIN_ENABLED=true. El launcher demo lo habilita; crea cuenta/billetera simulada por instalación/rol, o renueva sesión verificando secreto. Reingresar no reinicia saldo.
+- Límites por defecto: cliente 10.000 ARS, comercio cero, pago 1.000 ARS, diez pagos por autorización, 24 horas de autorización y 120 segundos de solicitud; contrastar configuración efectiva. Máximo predeterminado de 100 cuentas automáticas demo.
+- No compartir identidad entre teléfonos. Nuevas cuentas demo no heredan saldo/historial anterior; cuentas históricas y su evidencia deben conservarse.
+- `tools.run_demo android-config` genera `demo.local.properties` ignorado de Android: solo URL, emisor público y opción de instalación aislada. No incrustar contraseñas/JWT. Android Studio y launcher deben producir la misma URL efectiva.
+- `demo_events.py`, `demo_log_config.json` y launcher retransmiten eventos permitidos a consola y backend.log. Prohibidos cuerpos, headers, contraseñas, tokens, claves, datos personales y excepciones SQL parametrizadas.
+- Los pagos offline aparecen en el servidor al sincronizar. Distinguir aplicación contable tras commit de envío repetido o consulta de resultado.
+- Guía operativa: `GUIA_PRUEBA_MANUAL.md`. Android mantiene su guía `SINCRONIZACION_AUTOMATICA.md`; revisar ambos extremos si cambia conciliación.
 
-## Estado del POS verificado al 14/10/2026
+## Seguridad del entorno
 
-- `pos_desktop/` implementa acceso, importe, solicitud, espera, aceptación local, historial, configuración externa y tareas fuera del hilo de interfaz.
-- Once pruebas específicas cubren el flujo de dos acercamientos, reintento, acuse perdido, corte del segundo acercamiento, comprobante alterado, importe cambiado con firma válida, espera sin aceptación, DPAPI real, migración de cola, lote mixto y construcción de UI.
-- La cola SQLite v2 conserva intentos, próxima ejecución y resultado individual; la interfaz usa el mismo servicio durable para conciliar.
-- PySide6 se validó en modo offscreen. `pyscard` no pudo compilarse con Python 3.14 por falta de un wheel y de Microsoft C++ Build Tools; el adaptador permanece verificado solo por sintaxis hasta disponer de un entorno compatible y del lector.
+- `database.py` usa DATABASE_URL y conserva fallback relativo `sqlite:///./offline_payments.db`. Seleccionar y comprobar explícitamente el destino antes de cualquier ejecución; no asumir que arrancar el backend sea inocuo.
+- `main.py` ejecuta migraciones y create_all en lifespan. No arrancar sobre bases originales como verificación. Importar tampoco es una técnica de revisión de sintaxis ni garantía de ausencia de efectos.
+- No ejecutar herramientas administrativas, migraciones, POS, servidor, túnel o integraciones para validar cambios sin autorización. No usar servicios de pagos reales.
+- No leer/imprimir secretos cuando alcance inspeccionar su configuración y consumidores. No reproducir valores en instrucciones, registros, comandos visibles o respuestas.
+- Sintaxis permitida cuando corresponda: ast.parse sin importar la aplicación ni generar bytecode. Las futuras pruebas ejecutadas deben seleccionar bases temporales y proveedores simulados antes de importar módulos.
 
-## Entorno y efectos de ejecución
+## Evidencia actual y límites
 
-- Usar el entorno virtual de esta carpeta; comprobar `venv/Scripts/python.exe` antes de ejecutar comandos.
-- Instalación de dependencias, solo cuando la tarea lo requiera: `.\venv\Scripts\python.exe -m pip install -r requirements.txt`.
-- Arranque intencional: `.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000`.
-- No arrancar `main.py` sobre datos existentes: su lifespan crea/migra tablas y puede modificar datos. La importación actual no crea tablas; cualquier prueba que importe la aplicación debe fijar base temporal e integraciones desactivadas antes de importar.
-- La base configurada en `database.py` es SQLite con ruta relativa al directorio de ejecución; verificar el destino antes de correr.
-- Ejecutar `main.py` directamente puede activar un túnel; revisar integraciones y credenciales sin reproducir sus valores.
-- Las pruebas que ejecuten la aplicación requieren un entorno de prueba aislado y no deben alcanzar bases históricas ni servicios de pagos reales.
-- No considerar instalación, importación o arranque como operaciones inocuas de verificación.
+- Corte de programación previo a esta edición: `cbc9780`. C8 verificó sintaxis Python; Android compiló APK e instrumentadas. No se ejecutaron suites, simuladores, benchmarks ni instrumentadas durante estas correcciones.
+- Los antecedentes de 41 pruebas backend, 24 JVM, once POS y mediciones simuladas pertenecen a cortes anteriores. La auditoría R01–R34 invalidó el cierre integral: no presentarlos como regresión aprobada del código actual.
+- Usuario informó pagos físicos QR y NFC entre dos teléfonos, conciliación y actualización automática al recuperar Internet. Evidencia manual informada, sin ensayo controlado ni garantía de todos los escenarios.
+- Se observaron logs de login, registro, autorizaciones y ACCEPTED v3; una lectura diagnóstica mode=ro del 14/10 mostró saldo confirmado del comercio aunque la UI antigua mostraba cero. La pantalla fue corregida en Android, sin repetir ni alterar pagos.
+- La diferencia de reloj produjo un fallo de reserva y el usuario informó resolverlo sincronizando horas. No eliminar controles temporales para ocultarlo.
+- Pendientes de validación agrupada: migraciones reales, rollback, concurrencia, duplicados, pérdida de respuestas, estados mixtos, cuenta/sesión y revocación. ACR122U, PC/SC y POS físico siguen pendientes.
+- El arranque del servidor/túnel y los pagos recientes fueron realizados por el usuario. No atribuirlos a pruebas ejecutadas por el agente ni afirmar que esta edición documental los verificó.
 
-## Verificación y cierre
+## Trabajo y cierre
 
-- Para sintaxis, usar `ast.parse` sobre fuentes sin importarlas ni generar bytecode.
-- En la inspección inicial se comprobó sintaxis Python; no se ejecutaron API, conciliación ni integraciones externas.
-- La suite vigente se ejecuta con `.\venv\Scripts\python.exe -m unittest discover -s tests -v`; no usar `pytest` salvo que se agregue explícitamente como dependencia.
-- Para cambios funcionales, verificar validación, firma inválida, duplicados, saldo insuficiente, fallos parciales y rollback en entorno aislado.
-- Revisar que contratos y estados resultantes sean interpretados correctamente por Android; informar pruebas ejecutadas y limitaciones.
-
-
-## Plan correctivo vigente
-
-La auditoría R01–R34 invalida el cierre integral previo. El contrato y las rutas v3, compromisos, cierres, resoluciones firmadas, recargas simuladas idempotentes y controles de webhook están programados; las rutas mutantes heredadas responden retirada explícita. La conciliación v2 exige inventario histórico previo, cuya ventana está deshabilitada por defecto. La validación integral posterior continúa pendiente. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar API, concurrencia, migraciones, POS o hardware como comprobados mientras no se ejecuten.
-
-## Corte C8 para prueba manual
-
-- Entorno adicional `.venv313`: CPython 3.13.13 x64 y dependencias fijadas en `requirements-manual.lock`, incluido pyscard 2.3.1. No eliminar el entorno anterior.
-- Sintaxis de 53 archivos Python comprobada mediante AST, sin importar ni arrancar la aplicación. No suites, Qt, PC/SC ni simuladores ejecutados.
-- `registered_keys.revoked_at` es aditivo. Evidencia v3 emitida antes de la fecha efectiva puede conciliarse; la posterior o con fecha desconocida queda en revisión. Rechazos históricos ambiguos v2 no liberan reservas automáticamente.
-- `ISSUER_TRUST_PATH` apunta a inventario público externo fijado por ID/huella. Conservar emisores públicos anteriores; identidad privada activa permanece DPAPI fuera de Git.
-- POS migra 4→5 para confianza emisora persistida. Nunca ejecutar esa migración sobre bases originales como comprobación incidental.
-- `tools.prepare_demo` crea solo un directorio externo nuevo; `tools.run_demo` carga configuración DPAPI y prepara arranque/compilación/túnel por acción explícita del usuario. Estas herramientas no se ejecutaron durante C8.
-- Seguir `GUIA_PRUEBA_MANUAL.md`. APK necesita URL HTTPS e identidad externa correspondientes; el túnel ngrok se abre manualmente, no al importar backend.
-
-El corte C8-BE-02 ejecutó la preparación exclusivamente sobre una nueva carpeta
-externa `C:\Users\anita\TFG-Demo-Manual`, con dominio fijo
-`unfailing-bless-thrift.ngrok-free.dev`. No recrear esa carpeta ni su identidad.
-El modo start del launcher abre backend propio oculto y túnel con token local;
-Enter detiene esos procesos. No se ejecutó start ni pagos durante esta preparación.
-
-El usuario ejecutó el launcher y su login llegó al backend; autorización v3
-respondió 503 porque la ruta emisora recibida del entorno era str y se usaba como
-Path. C8-BE-03 normaliza ambos tipos en issuer_keys._external. AST correcto;
-la ejecución posterior requiere reiniciar la demostración. No recrear claves,
-cuentas o bases como solución a ese error.
-
-La consola C8-BE-04 muestra eventos operativos permitidos y retransmite stdout
-del backend al launcher conservando backend.log. No registrar cuerpos, headers,
-JWT, contraseñas, claves, nombres personales ni excepciones SQL parametrizadas.
-Un pago offline solo aparece en el servidor al sincronizar. La observación de
-eventos no acredita por sí sola un nuevo débito; distinguir aplicación tras commit
-de reintento/consulta. Verificación de esta unidad: solo AST y JSON.
-
-Limpieza recuperable del 14/10/2026: temporales y auxiliares obsoletos archivados
-fuera del proyecto en C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01.
-Conservar ese archivo para recuperación; fuentes, bases, claves y APKs permanecen.
-No se ejecutaron pruebas ni se validó funcionamiento mediante esta limpieza.
-
-Acceso demo C8-05/06: botones cliente/comercio usan identidad aleatoria cifrada
-por instalación y rol, conservada tras logout. El endpoint /api/demo/device-login
-solo opera con DEMO_DEVICE_LOGIN_ENABLED=true (launcher demo explícito); cuentas
-simuladas nuevas, sin reiniciar saldos al repetir. Cuentas previas se conservan.
-Android Studio usa demo.local.properties ignorado, generado por run_demo android-config
-con URL y claves PUBLICAS; no contraseñas/JWT. No transferir identidad a otros móviles.
+- Registrar Git inicial/final y conservar cambios previos. Cada unidad: ID, entrada EN PROGRESO en REGISTRO_CAMBIOS.md, revisión y commit local junto con documentación real. Sin push.
+- Última autorización: no pruebas, lint, simuladores, benchmarks, pagos ni arranques. Únicamente sintaxis Python y compilación Android cuando la tarea lo requiera. Edición documental: solo lectura y diff, sin volver a compilar.
+- Antes de contratos HTTP revisar Android `network/ApiService.kt`, `SyncItem.kt`, protocolos y sincronizadores, además de `pos_desktop/backend_client.py`, servicio y cola. Evaluar recorridos completos, no módulos aislados.
+- Actualizar registro consolidado y decisiones/instrucciones afectadas. No reescribir Entrega 4 ni fuentes originales.
+- Informar implementación, evidencia estática, compilación, ejecución real, informe manual y pendientes por separado. No declarar resuelto un hallazgo por existir un commit, una prueba escrita o una entrada de registro.

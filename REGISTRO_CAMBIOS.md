@@ -653,3 +653,11 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivos: demo_access.py, main.py, tools/run_demo.py, GUIA_PRUEBA_MANUAL.md, AGENTS y registros.
 - Contrato: UUID, rol cliente/comercio y secreto aleatorio de 256 bits; hash bcrypt en servidor. Creación cuenta/billetera SQL serializada; reintentos verifican secreto, nunca reinician saldo. Máximo 100 cuentas demo.
 - Verificación: AST correcto sin importar backend. No arranque, migraciones, peticiones HTTP ni pagos ejecutados. Reiniciar launcher requerido; datos anteriores intactos.
+
+## TFG-C8-BE-07 — Instrucciones backend actualizadas
+- Fecha: 2026-10-15. Estado: COMPROBADO DOCUMENTAL / SIN NUEVA VALIDACIÓN FUNCIONAL.
+- Requisito: preparar contexto fiel para auditoría nueva, sin garantías heredadas. Retirar contradicciones v2/v3, rutas retiradas, entorno y evidencia histórica; conservar reglas de seguridad y trazabilidad.
+- Verificación: lectura de código, estado Git y diff, sin ejecutar backend ni pruebas.
+- Commit: docs(agents): [TFG-C8-BE-07] actualizar contexto backend y evidencia.
+- Resultado: AGENTS del área consolidado, sin instrucciones contradictorias de versiones ni garantías heredadas; evidencia manual y pendientes separados. Se ajustó contexto compartido general y registro consolidado.
+- Archivos del commit: AGENTS.md y REGISTRO_CAMBIOS.md. No código, configuración, datos ni entregas históricas. Revisados fuentes seleccionadas y diff; ninguna prueba ni compilación ejecutada.
