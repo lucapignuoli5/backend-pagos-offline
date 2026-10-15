@@ -644,3 +644,12 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivo externo: `C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01`; manifiesto con rutas exactas. Herramientas actuales, ambos entornos, bases, fuentes y evidencia conservados.
 - Verificación: clasificación, rutas, estado Git y diff; sin pruebas ni arranque. El ngrok operativo está en TFG-Demo-Manual y no se modificó.
 - Commit: `chore(cleanup): [TFG-C8-BE-05] archivar auxiliares obsoletos`.
+
+## TFG-C8-BE-06 — Acceso automático por dispositivo de demostración
+- Fecha: 2026-10-14. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Requisito: acceso con un toque, identidad aleatoria durable por instalación/rol, sin credenciales compartidas embebidas.
+- Alcance: endpoint demo deshabilitado por defecto; launcher explícito lo habilita en demostración. Configuración pública local para Android Studio. Sin pruebas ni arranque.
+- Commit: feat(demo): [TFG-C8-BE-06] aprovisionar acceso automático por dispositivo.
+- Archivos: demo_access.py, main.py, tools/run_demo.py, GUIA_PRUEBA_MANUAL.md, AGENTS y registros.
+- Contrato: UUID, rol cliente/comercio y secreto aleatorio de 256 bits; hash bcrypt en servidor. Creación cuenta/billetera SQL serializada; reintentos verifican secreto, nunca reinician saldo. Máximo 100 cuentas demo.
+- Verificación: AST correcto sin importar backend. No arranque, migraciones, peticiones HTTP ni pagos ejecutados. Reiniciar launcher requerido; datos anteriores intactos.

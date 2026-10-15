@@ -189,3 +189,27 @@ de la demostración. No se ejecutó simulador en esta entrega.
   nunca inventar fechas para revocaciones anteriores.
 - Hardware, migraciones, concurrencia, contabilidad, restauración e interacción entre
   teléfonos siguen pendientes. Una compilación correcta no acredita estos resultados.
+
+## Acceso con un toque y Android Studio (C8-05/06)
+
+El APK nuevo no contiene contraseñas compartidas. Cliente/Comercio crean o recuperan
+una cuenta de demostración individual por instalación y rol, mediante un secreto
+aleatorio local cifrado. Primer acceso requiere Internet. Logout conserva identidad;
+no borrar datos ni reinstalar limpiando almacenamiento si se desea conservarla.
+Las cuentas/bases/operaciones anteriores no se eliminan; las nuevas cuentas no
+heredan su saldo ni historial. Reintentar ingreso no vuelve a cargar saldo inicial.
+
+1. Actualizar ambos teléfonos con el APK nuevo.
+2. Enter y reabrir INICIAR_DEMO.cmd para cargar el endpoint demo.
+3. Comercio primero; cliente después para conocer su clave. Si el cliente ingresó
+   antes, volver a ingresar para refrescar confianza antes del intercambio.
+4. Android Studio: Sync Gradle y Run usa la misma instalación .manual configurada.
+
+La configuración pública local ignorada demo.local.properties incluye solo URL,
+emisor e instalación aislada. Para regenerarla sin compilar:
+
+.\.venv313\Scripts\python.exe -m tools.run_demo android-config --directory C:\Users\anita\TFG-Demo-Manual
+
+El acceso automático está deshabilitado en arranque normal. El launcher demo
+habilita DEMO_DEVICE_LOGIN_ENABLED=true; máximo predeterminado 100 cuentas
+automáticas por base. No habilitar este modo para una aplicación de dinero real.

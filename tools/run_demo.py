@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("backend", "pos", "android", "credentials", "tunnel", "start"))
+    parser.add_argument("mode", choices=("backend", "pos", "android", "android-config", "credentials", "tunnel", "start"))
     parser.add_argument("--directory", required=True, type=Path)
     parser.add_argument("--domain", help="Existing reserved ngrok hostname, without https://")
     args = parser.parse_args()
@@ -19,9 +19,21 @@ def main():
     directory = args.directory.resolve()
     config = json.loads(WindowsDpapiProtector().unprotect((directory / "config.dpapi").read_bytes()))
     environment = dict(os.environ, **config)
+    environment["DEMO_DEVICE_LOGIN_ENABLED"] = "true"
     environment["PYTHONUNBUFFERED"] = "1"
     environment["PYTHONIOENCODING"] = "utf-8"
     source = Path(__file__).resolve().parents[1]
+    if args.mode in {"android", "android-config"}:
+        # Public configuration only: Studio and the command line use the same trust root.
+        public = {name: config[name] for name in (
+            "API_BASE_URL", "ISSUER_PUBLIC_KEY_B64", "ISSUER_KEY_ID", "ISSUER_TRUST_JSON")}
+        public["DEMO_ISOLATED_INSTALL"] = "true"
+        target = source.parent / "Prototipo Pagos Offline Android" / "demo.local.properties"
+        target.write_text("\n".join(name + "=" + value.replace("\\", "\\\\")
+            for name, value in public.items()) + "\n", encoding="ascii")
+        if args.mode == "android-config":
+            print("Configuracion publica de Android Studio preparada; no contiene contrasenas.")
+            return
     backend_command = [
         sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000",
         "--no-access-log", "--log-config", str(source / "demo_log_config.json"),

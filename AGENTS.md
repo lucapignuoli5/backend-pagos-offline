@@ -101,3 +101,10 @@ Limpieza recuperable del 14/10/2026: temporales y auxiliares obsoletos archivado
 fuera del proyecto en C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01.
 Conservar ese archivo para recuperación; fuentes, bases, claves y APKs permanecen.
 No se ejecutaron pruebas ni se validó funcionamiento mediante esta limpieza.
+
+Acceso demo C8-05/06: botones cliente/comercio usan identidad aleatoria cifrada
+por instalación y rol, conservada tras logout. El endpoint /api/demo/device-login
+solo opera con DEMO_DEVICE_LOGIN_ENABLED=true (launcher demo explícito); cuentas
+simuladas nuevas, sin reiniciar saldos al repetir. Cuentas previas se conservan.
+Android Studio usa demo.local.properties ignorado, generado por run_demo android-config
+con URL y claves PUBLICAS; no contraseñas/JWT. No transferir identidad a otros móviles.

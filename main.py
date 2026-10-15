@@ -32,6 +32,7 @@ from api_v3 import router as api_v3_router
 from auth import LoginThrottle, create_access_token, get_current_user, require_role
 from sync_v2 import router as sync_v2_router
 from demo_events import event
+from demo_access import router as demo_access_router
 from crypto_utils import verify_payment_contract_signature
 from database import Base, SessionLocal, engine, get_db
 from migrations import backfill_wallets, run_schema_migrations
@@ -156,6 +157,7 @@ app.add_middleware(
 app.include_router(api_v2_router)
 app.include_router(api_v3_router)
 app.include_router(sync_v2_router)
+app.include_router(demo_access_router)
 
 @app.middleware("http")
 async def operational_console(request: Request, call_next):
