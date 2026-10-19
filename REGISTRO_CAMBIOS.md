@@ -674,3 +674,13 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivos: PUBLICACION_GITHUB_2026-10-19.md, antecedentes/github_2026-07-06/*.md, AGENTS.md y este registro. Todos los cambios del árbol de esta unidad son Markdown; código funcional y datos conservados.
 - Resultado: merge con historia completa preparado, referencias remotas verificables y mensajes de commit detallados en español. Confirmación de subida a origin/main se comunicará tras git push y contraste de hash remoto.
 - Antecedentes copiados byte a byte: conservan espacios finales históricos señalados por diff --check. Se verifica limpieza del resto del diff; no se reescriben originales para eliminar esos avisos.
+
+## TFG-C8-BE-09 — Inventario de limpieza y retirada de APK
+
+- Fecha: 2026-10-19. Estado: COMPROBADO DOCUMENTAL / INVENTARIO COMPLETO.
+- Solicitud: inventariar ambas carpetas, clasificar eliminar/archivar/conservar/investigar y borrar APK porque el usuario instala desde Android Studio.
+- Alcance: medir archivos y referencias estáticas; borrar únicamente APK generados identificados, incluido APK externo preparado en TFG-Demo-Manual. No borrar código, datos, claves, entornos, migraciones, pruebas ni cachés en esta unidad.
+- Preservación: registrar estados Git y rutas/tamaños antes de borrar; sin tests, compilación, instalación, servicios, migraciones o pagos. La publicación anterior no autoriza push de estos cambios nuevos.
+- Resultado: inventario por área y general con tamaños, candidatos y consumidores. Código y scripts solo clasificados. Revisión automática bloqueó borrado de los cuatro APK en dos comandos; todos siguen presentes, sin espacio liberado ni eliminación alternativa.
+- Archivos del commit: INVENTARIO_LIMPIEZA_2026-10-19.md, AGENTS.md y REGISTRO_CAMBIOS.md; informes/registro general y académico fuera de estos repos. Solo documentación; sin pruebas, compilación ni instalación.
+- Asunto exacto: docs(limpieza): [TFG-C8-BE-09] inventariar scripts, cachés y código heredado.

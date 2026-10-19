@@ -70,3 +70,12 @@ anterior Sin push para esta publicación; no implica permiso general para public
 cambios futuros. No reescribir historia ni usar force-push. Ver
 PUBLICACION_GITHUB_2026-10-19.md; documentos remotos antiguos se preservan como
 antecedentes y no revierten el contrato v3 ni habilitan integraciones reales.
+
+## Inventario de limpieza — 19/10/2026
+
+Ver INVENTARIO_LIMPIEZA_2026-10-19.md del área y el inventario general en la raíz.
+Esta unidad clasifica candidatos; no retira código, scripts, cachés, bases o claves.
+El usuario autorizó borrar APK generados, pero la revisión automática rechazó
+ambos comandos antes de ejecutar. Los cuatro APK Android/demo siguen presentes;
+no afirmar que se borraron ni que se liberó espacio. No ejecutar las propuestas
+de código de forma incidental. Sin pruebas, compilación, instalación ni push.
