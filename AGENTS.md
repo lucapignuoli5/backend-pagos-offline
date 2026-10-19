@@ -61,3 +61,12 @@ Leer `../../AGENTS.md` y este archivo antes de trabajar. Backend/POS y Android s
 - Antes de contratos HTTP revisar Android `network/ApiService.kt`, `SyncItem.kt`, protocolos y sincronizadores, además de `pos_desktop/backend_client.py`, servicio y cola. Evaluar recorridos completos, no módulos aislados.
 - Actualizar registro consolidado y decisiones/instrucciones afectadas. No reescribir Entrega 4 ni fuentes originales.
 - Informar implementación, evidencia estática, compilación, ejecución real, informe manual y pendientes por separado. No declarar resuelto un hallazgo por existir un commit, una prueba escrita o una entrada de registro.
+
+## Publicación autorizada — 19/10/2026
+
+El usuario autorizó explícitamente subir los commits actuales a origin/main con
+explicaciones específicas en español. Esta autorización prevalece sobre la regla
+anterior Sin push para esta publicación; no implica permiso general para publicar
+cambios futuros. No reescribir historia ni usar force-push. Ver
+PUBLICACION_GITHUB_2026-10-19.md; documentos remotos antiguos se preservan como
+antecedentes y no revierten el contrato v3 ni habilitan integraciones reales.
