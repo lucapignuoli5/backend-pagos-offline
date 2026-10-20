@@ -8,7 +8,7 @@ Leer `../../AGENTS.md` y este archivo antes de trabajar. Backend/POS y Android s
 - `main.py`: aplicación, login común, rutas históricas, integración opcional y consola. `api_v3.py`/`sync_v3.py`: autorizaciones, cierres, recargas simuladas, conciliación y resoluciones v3.
 - `api_v2.py`/`sync_v2.py`: registro/confianza/saldo compartidos y compatibilidad histórica. La presencia de rutas sin v3 no significa que un pago nuevo sea v2.
 - `schemas.py`, `models.py`, `database.py`, `migrations.py` y módulos criptográficos definen contratos, persistencia, evolución y confianza. Revisar productores y consumidores Android/POS antes de cambiarlos.
-- `pos_desktop/`: Python/PySide6, SQLite, DPAPI, adaptadores PC/SC y simulador. Persistencia en `pos_desktop/database.py`, versión 5; no confundir versión de esquema con versión de contrato.
+- `pos_desktop/`: Python/PySide6, SQLite, DPAPI, adaptadores PC/SC y simulador. Persistencia en `pos_desktop/database.py`, versión 7; no confundir versión de esquema con versión de contrato.
 - El POS principal requiere Windows y ACR122U. El lector todavía no está disponible; la implementación y las simulaciones no acreditan interoperabilidad física.
 - Saldos y recargas simulados; no liquidación real ni certificación comercial. Mercado Pago opcional y deshabilitado por defecto.
 
@@ -92,3 +92,10 @@ de código de forma incidental. Sin pruebas, compilación, instalación ni push.
 - La base POS migra aditivamente de esquema 5 a 6 y guarda los bytes de la resolución v3 después de validar firma y vínculo con solicitud, autorización y comprobante.
 - La aplicación aún debe invocar migración al abrir antes de leer operaciones; no se ejecutó esta migración durante la programación.
 - Sintaxis Python comprobada con AST aislado; no se ejecutó POS ni pruebas. Revisión funcional queda pendiente.
+
+## Recuperación C12 — 20/10/2026
+
+- La respuesta de un envío contradictorio no cambia un pago ACCEPTED/REJECTED; devuelve el resultado financiero y resolución original para que el participante los verifique. Evidencia inválida no marca una billetera final como revisión.
+- El backfill detecta índices de emisión duplicados incluso si los claims ya existían. La herramienta `tools.recover_final_payments` diagnostica en solo lectura; una reparación explícita exige copia previa, mantiene asientos/saldos/compromisos y no limpia la marca de revisión de la billetera.
+- POS migra aditivamente 6→7 para recuperar resoluciones históricas mediante GET v3. El botón de conciliación permite reintentar evidencia marcada para atención; el estado financiero no se reabre.
+- `tools.backup_sqlite` crea una copia coherente a un destino nuevo con origen/destino explícitos. Detener backend/POS y copiar antes de abrir una base existente con código nuevo. No se ejecutó ninguna migración o reparación sobre datos existentes.

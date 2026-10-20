@@ -178,8 +178,8 @@ de la demostración. No se ejecutó simulador en esta entrega.
 
 ## Compatibilidad y límites
 
-- Room permanece en 16; migraciones 5→16 se conservan, pero no fueron ejecutadas.
-- POS agrega migración 4→5 para inventario público del emisor; no se abrió ninguna
+- En el corte C8 Room permanecía en 16; las migraciones 5→16 se conservaron pero no se ejecutaron en esa entrega. C12 declara Room 18; migración 17→18 todavía pendiente de prueba real.
+- En C8 POS agregó migración 4→5 para inventario público del emisor; C12 declara esquema 7. No se abrió ninguna
   base POS existente durante la implementación.
 - V2 solo concilia evidencia previamente inventariada. La ventana sigue cerrada;
   los datos heredados requieren un procedimiento separado sobre copias.
@@ -213,3 +213,22 @@ emisor e instalación aislada. Para regenerarla sin compilar:
 El acceso automático está deshabilitado en arranque normal. El launcher demo
 habilita DEMO_DEVICE_LOGIN_ENABLED=true; máximo predeterminado 100 cuentas
 automáticas por base. No habilitar este modo para una aplicación de dinero real.
+
+## Comprobación manual C12 y recuperación segura
+
+Antes de actualizar una instalación que contiene pagos, conservar la app y sus datos. No desinstalar, limpiar almacenamiento ni instalar una APK anterior: una versión vieja puede no abrir Room 18. Si falla una migración, detener el intento, conservar el teléfono intacto y registrar el error para preparar una corrección aditiva. La compilación de Android no acredita migración ejecutada.
+
+Detener backend y POS antes de abrir con código nuevo sus bases existentes. Crear copias SQLite coherentes en destinos nuevos y fuera de la carpeta activa con `python -m tools.backup_sqlite --source <base-existente> --destination <copia-nueva>`; seleccionar cada base explícitamente. No reemplazar la base original por una copia sin diagnosticar primero. La herramienta `tools.recover_final_payments` usa un inventario público externo y solo diagnostica por defecto; `--apply` exige directorio de copia y servidor detenido. Reparar una fila no desbloquea automáticamente la billetera: revisar el motivo restante antes de cualquier decisión administrativa.
+
+Comprobar con cuentas y saldos simulados, registrando resultado y hora:
+
+1. Reenviar una operación aceptada y luego evidencia alterada: saldo, asientos y resolución original deben permanecer finales.
+2. Presentar resolución inválida: el cliente conserva reserva y no marca aceptación por una firma falsa.
+3. Actualizar una instalación con ID de solicitud anterior pendiente: «Cupo» recupera el mismo ID; si coexistía otro intento, ambos quedan identificables sin sustituirlos.
+4. Agotar diez índices con pagos pequeños: «Cupo» cierra el tramo sin esperar 24 horas; el importe de comprobantes pendientes permanece respaldado.
+5. Perder el acuse y reanudar tras los 120 segundos: se reutilizan solicitud, comprobante e índice originales por NFC/QR.
+6. Reiniciar comercio y cliente después de un final: la resolución firmada sigue disponible; historial anterior sin sobre la consulta por GET sin otro movimiento financiero.
+7. Repetir la recuperación histórica: no aparecen asientos ni cambios de saldo adicionales.
+8. Si hay índice duplicado, firma desconocida o evidencia incompleta, conservar la revisión y documentar la causa; no liberar fondos manualmente por intuición.
+
+Estas comprobaciones quedan a cargo del equipo. No equivalen a una prueba con ACR122U hasta disponer del lector.

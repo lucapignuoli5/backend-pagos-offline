@@ -18,6 +18,7 @@ class PosOperation:
     receipt_envelope: bytes | None
     ack_envelope: bytes | None
     resolution_envelope: bytes | None
+    resolution_recovery_status: str
     state: str
     created_at: str
     updated_at: str
@@ -43,7 +44,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 6:
+            if version > 7:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -149,6 +150,17 @@ class PosDatabase:
                     BEGIN IMMEDIATE;
                     ALTER TABLE operations ADD COLUMN resolution_envelope BLOB;
                     PRAGMA user_version=6;
+                    COMMIT;
+                    """
+                )
+                version = 6
+            if version == 6:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    ALTER TABLE operations ADD COLUMN resolution_recovery_status TEXT NOT NULL DEFAULT 'PENDING';
+                    UPDATE operations SET resolution_recovery_status='COMPLETE' WHERE resolution_envelope IS NOT NULL;
+                    PRAGMA user_version=7;
                     COMMIT;
                     """
                 )
@@ -345,6 +357,8 @@ class PosDatabase:
         now: str, next_sync_at: str | None = None,
         resolution_envelope: bytes | None = None,
     ) -> None:
+        if status in {"ACCEPTED", "REJECTED"} and not resolution_envelope:
+            raise ValueError("Resultado final sin resolucion firmada")
         state = {
             "ACCEPTED": "SYNCED",
             "REJECTED": "REJECTED",
@@ -357,12 +371,63 @@ class PosDatabase:
                                       THEN sync_attempts + 1 ELSE sync_attempts END,
                    next_sync_at=?, last_sync_error=?,
                    resolution_envelope=CASE WHEN ? IN ('ACCEPTED','REJECTED')
-                                            THEN COALESCE(resolution_envelope, ?) ELSE resolution_envelope END
+                                            THEN COALESCE(resolution_envelope, ?) ELSE resolution_envelope END,
+                   resolution_recovery_status=CASE WHEN ? IN ('ACCEPTED','REJECTED')
+                                            THEN 'COMPLETE' ELSE resolution_recovery_status END
                    WHERE operation_id=? AND state='LOCALLY_ACCEPTED'""",
-                (state, now, status, next_sync_at, code, status, resolution_envelope, operation_id),
+                (state, now, status, next_sync_at, code, status, resolution_envelope, status, operation_id),
             )
             if result.rowcount != 1:
                 raise ValueError("Operacion POS no disponible para conciliacion")
+
+    def list_resolution_recovery_candidates(self, now: str, limit: int = 100) -> list[PosOperation]:
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                """SELECT * FROM operations WHERE state IN ('SYNCED','REJECTED')
+                   AND resolution_envelope IS NULL AND authorization_envelope IS NOT NULL
+                   AND resolution_recovery_status='PENDING'
+                   AND (NOT EXISTS (SELECT 1 FROM pos_profile)
+                        OR terminal_id=(SELECT terminal_id FROM pos_profile WHERE singleton=1))
+                   AND (next_sync_at IS NULL OR next_sync_at <= ?)
+                   ORDER BY updated_at ASC LIMIT ?""", (now, min(limit, 100))
+            ).fetchall()
+            return [PosOperation(**dict(row)) for row in rows]
+
+    def attach_final_resolution(self, operation_id: str, resolution: bytes) -> None:
+        with closing(self.connect()) as db:
+            result = db.execute(
+                """UPDATE operations SET resolution_envelope=?, resolution_recovery_status='COMPLETE',
+                   next_sync_at=NULL WHERE operation_id=? AND state IN ('SYNCED','REJECTED')
+                   AND resolution_envelope IS NULL AND resolution_recovery_status='PENDING'""",
+                (resolution, operation_id),
+            )
+            if result.rowcount != 1:
+                raise ValueError("La operacion POS cambio durante la recuperacion")
+
+    def schedule_resolution_recovery(self, operation_id: str, next_at: str) -> None:
+        with closing(self.connect()) as db:
+            db.execute(
+                """UPDATE operations SET sync_attempts=sync_attempts+1, next_sync_at=?
+                   WHERE operation_id=? AND state IN ('SYNCED','REJECTED')
+                   AND resolution_envelope IS NULL AND resolution_recovery_status='PENDING'""",
+                (next_at, operation_id),
+            )
+
+    def flag_resolution_recovery(self, operation_id: str) -> None:
+        with closing(self.connect()) as db:
+            db.execute(
+                """UPDATE operations SET resolution_recovery_status='ATTENTION_REQUIRED', next_sync_at=NULL
+                   WHERE operation_id=? AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL""",
+                (operation_id,),
+            )
+
+    def retry_attention_resolutions(self) -> None:
+        with closing(self.connect()) as db:
+            db.execute(
+                """UPDATE operations SET resolution_recovery_status='PENDING'
+                   WHERE resolution_recovery_status='ATTENTION_REQUIRED'
+                   AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL"""
+            )
 
     def _transition(self, operation_id: str, allowed: set[str], state: str, now: str) -> None:
         placeholders = ",".join("?" for _ in allowed)

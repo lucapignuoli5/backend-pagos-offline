@@ -210,7 +210,7 @@ class PosWindow(QMainWindow):
             self._show_history()
 
         self._run(
-            lambda: self.sync_service.sync_due(self.access_token),
+            lambda: self.sync_service.sync_due(self.access_token, manual=True),
             success,
             self.sync_status,
         )

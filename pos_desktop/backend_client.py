@@ -161,6 +161,14 @@ class PosBackendClient:
             raise RuntimeError("Estado de operacion invalido")
         return value
 
+    def fetch_verified_final_resolution(self, access_token: str, operation_id: str,
+                                        evidence: dict, expected_status: str) -> bytes | None:
+        result = self.get_operation_status(access_token, operation_id)
+        if (result.get("final") is not True or result.get("operation_status") != expected_status
+                or not self._valid_resolution(result, evidence)):
+            return None
+        return base64.b64decode(result["resolution_envelope_b64"], validate=True)
+
     def _get(self, path: str, token: str) -> list[dict]:
         request = Request(
             self.config.backend_url.rstrip("/") + path,

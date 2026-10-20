@@ -725,3 +725,11 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Commit: `fix(conciliacion): [TFG-C12-CO-01] preservar resoluciones finales ante conflictos`.
 - Antes: un envío alterado degradaba ACCEPTED/REJECTED. Ahora: devuelve conflicto del envío junto con estado financiero y resolución original; no cambia fila final, asientos ni marca de revisión. El POS valida esa resolución primero y usa el código firmado.
 - Archivos: `sync_v3.py`, `pos_desktop/backend_client.py`, este registro. Verificación: AST Python y revisión estática; solicitudes HTTP pendientes.
+
+## TFG-C12-CO-02 — Recuperar evidencia final POS
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: operaciones POS históricas finales carecen de resolución local.
+- Alcance: migración aditiva 6→7 y recuperación por consulta de estado sin volver a contabilizar.
+- Commit: `fix(pos): [TFG-C12-CO-02] recuperar resoluciones históricas sin mover saldos`.
+- Antes: filas finales previas podían carecer de resolución local. Ahora: SQLite 6→7 conserva estado de recuperación; GET v3 verifica firma y vínculos antes de adjuntar bytes en la fila final. Errores de red se reintentan, 404/prueba inválida se aíslan como atención; acción manual permite reintentar. No se reenvía el pago ni se mueven fondos.
+- Archivos: `pos_desktop/database.py`, `pos_desktop/backend_client.py`, `pos_desktop/sync.py`, `pos_desktop/ui.py`, `AGENTS.md`, `GUIA_PRUEBA_MANUAL.md`, este registro. Verificación: AST Python y diff; POS y migración real no ejecutados.
