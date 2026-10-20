@@ -96,15 +96,17 @@ class PosBackendClient:
         for result in results:
             submission = result.get("submission_status")
             operation = result.get("operation_status")
-            if submission == "CONFLICT":
+            if operation in {"ACCEPTED", "REJECTED"} and result.get("final") is True:
+                evidence = submitted.get(result.get("operation_id"))
+                status = operation if self._valid_resolution(result, evidence) else "RETRYABLE_ERROR"
+            elif submission == "CONFLICT":
                 status = "CONFLICT"
             elif submission == "RETRYABLE_ERROR":
                 status = "RETRYABLE_ERROR"
             elif submission == "INVALID_EVIDENCE":
                 status = "CONFLICT"
             elif operation in {"ACCEPTED", "REJECTED"}:
-                evidence = submitted.get(result.get("operation_id"))
-                status = operation if result.get("final") is True and self._valid_resolution(result, evidence) else "RETRYABLE_ERROR"
+                status = "RETRYABLE_ERROR"
             elif operation == "PENDING_EVIDENCE":
                 status = operation
             elif operation == "PENDING_REVIEW":
@@ -112,10 +114,12 @@ class PosBackendClient:
             else:
                 status = "PENDING_EVIDENCE"
             resolution = None
+            code = result.get("code")
             if status in {"ACCEPTED", "REJECTED"}:
                 resolution = base64.b64decode(result["resolution_envelope_b64"], validate=True)
+                code = parse_signed_envelope(resolution).payload["code"]
             normalized.append({"operation_id": result.get("operation_id"), "status": status,
-                               "code": result.get("code"), "resolution_envelope": resolution})
+                               "code": code, "resolution_envelope": resolution})
         return normalized
 
     def _valid_resolution(self, result: dict, evidence: dict | None) -> bool:
@@ -142,6 +146,7 @@ class PosBackendClient:
                 and payload["merchant_id"] == request.payload["merchant_id"]
                 and payload["terminal_id"] == request.payload["terminal_id"]
                 and payload["amount_cents"] == request.payload["amount_cents"]
+                and payload["currency"] == request.payload["currency"] == "ARS"
                 and payload["offline_authorization_id"] == receipt.payload["offline_authorization_id"]
                 and payload["request_digest"] == payload_digest(request)
                 and payload["authorization_digest"] == payload_digest(grant)

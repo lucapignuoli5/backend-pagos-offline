@@ -47,33 +47,27 @@ def process_evidence_v3(db: Session, user: models.User,
         existing = db.get(models.OfflinePaymentV2, operation_id)
         if existing is not None:
             _authorize(db, user, existing.wallet_id, existing.terminal_id)
-            if existing.request_envelope != request_wire or existing.receipt_envelope != receipt_wire:
-                wallet_id = existing.wallet_id
-                db.execute(update(models.Wallet).where(models.Wallet.id == wallet_id).values(
-                    offline_review_required=True
-                ))
-                existing.state = "PENDING_REVIEW"
-                existing.rejection_code = "CONTENT_MISMATCH"
-                db.commit()
-                return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "CONTENT_MISMATCH")
-            if existing.ack_envelope is not None and ack_wire is not None and existing.ack_envelope != ack_wire:
-                db.execute(update(models.Wallet).where(models.Wallet.id == existing.wallet_id).values(
-                    offline_review_required=True
-                ))
-                existing.state = "PENDING_REVIEW"
-                existing.rejection_code = "ACK_MISMATCH"
-                db.commit()
-                return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "ACK_MISMATCH")
             if existing.state in {"ACCEPTED", "REJECTED"}:
+                resolution = db.get(models.PaymentResolution, operation_id)
+                if resolution is None or resolution.status != existing.state:
+                    final_state = existing.state
+                    db.rollback()
+                    return _result(operation_id, "RETRYABLE_ERROR", final_state, False,
+                                   "SIGNED_RESOLUTION_MISSING")
+                code = None
+                if existing.request_envelope != request_wire or existing.receipt_envelope != receipt_wire:
+                    code = "CONTENT_MISMATCH"
+                elif existing.ack_envelope is not None and ack_wire is not None and existing.ack_envelope != ack_wire:
+                    code = "ACK_MISMATCH"
                 known_grant = db.get(models.OfflineCommitment, existing.authorization_id)
                 if known_grant is None or known_grant.authorization_envelope != grant_wire:
+                    code = "AUTHORIZATION_MISMATCH"
+                if code is not None:
+                    final_state = existing.state
+                    original_resolution = bytes(resolution.resolution_envelope)
                     db.rollback()
-                    return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "AUTHORIZATION_MISMATCH")
-                resolution = db.get(models.PaymentResolution, operation_id)
-                if resolution is None:
-                    db.rollback()
-                    return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
-                                   "SIGNED_RESOLUTION_MISSING")
+                    return _result(operation_id, "CONFLICT", final_state, True,
+                                   code, original_resolution)
                 if existing.ack_envelope is None and ack_wire is not None:
                     ack = parse_signed_envelope(ack_wire)
                     validate_ack_binding(request, receipt, ack)
@@ -83,9 +77,17 @@ def process_evidence_v3(db: Session, user: models.User,
                     existing.ack_envelope = ack_wire
                     db.flush()
                 result = _result(operation_id, "VALIDATED", existing.state, True,
-                               existing.rejection_code, resolution.resolution_envelope)
+                                 existing.rejection_code, resolution.resolution_envelope)
                 db.commit()
                 return result
+            if existing.request_envelope != request_wire or existing.receipt_envelope != receipt_wire:
+                current_state = existing.state if existing.state in {"PENDING_EVIDENCE", "PENDING_REVIEW"} else "UNRESOLVED"
+                db.rollback()
+                return _result(operation_id, "CONFLICT", current_state, False, "CONTENT_MISMATCH")
+            if existing.ack_envelope is not None and ack_wire is not None and existing.ack_envelope != ack_wire:
+                current_state = existing.state if existing.state in {"PENDING_EVIDENCE", "PENDING_REVIEW"} else "UNRESOLVED"
+                db.rollback()
+                return _result(operation_id, "CONFLICT", current_state, False, "ACK_MISMATCH")
 
         wallet, merchant_wallet, terminal, authorization, commitment, review = _validate(
             db, request, grant, grant_wire, receipt, ack_wire
@@ -213,6 +215,13 @@ def process_evidence_v3(db: Session, user: models.User,
         raise
     except (ProtocolError, ValueError, TypeError, KeyError, binascii.Error):
         db.rollback()
+        known = db.get(models.OfflinePaymentV2, operation_id)
+        if known is not None and known.state in {"ACCEPTED", "REJECTED"}:
+            _authorize(db, user, known.wallet_id, known.terminal_id)
+            resolution = db.get(models.PaymentResolution, operation_id)
+            if resolution is not None and resolution.status == known.state:
+                return _result(operation_id, "CONFLICT", known.state, True,
+                               "INVALID_SUBMISSION", bytes(resolution.resolution_envelope))
         return _result(operation_id, "INVALID_EVIDENCE", "UNRESOLVED", False, "INVALID_EVIDENCE")
     except IntegrityError:
         db.rollback()

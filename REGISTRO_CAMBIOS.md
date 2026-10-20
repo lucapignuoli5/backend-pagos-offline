@@ -717,3 +717,11 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Commit: `fix(migracion): [TFG-C12-BE-01] detectar conflictos históricos sin alterar asientos`.
 - Antes: claims previos duplicados no marcaban revisión. Ahora: backfill escanea todos los índices; la herramienta administrativa exige base explícita, inventario público fijado, diagnóstico por defecto y copia antes de reparar bajo transacción. Solo restaura un ACCEPTED degradado si firmas, alcance, digests, emisión, fecha y exactamente dos asientos coinciden. Conserva saldos/compromisos/clave y no limpia revisión de billetera.
 - Archivos: `migrations.py`, `tools/recover_final_payments.py`, `tools/backup_sqlite.py`, este registro. Verificación: AST Python; ninguna herramienta ni migración fue ejecutada sobre bases existentes. Interrupción de migración requiere diagnóstico desde copia coherente, nunca downgrade automático.
+
+## TFG-C12-CO-01 — Inmutabilidad de resultados financieros finales
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: una presentación contradictoria podía degradar un pago final y bloquear la billetera; clientes descartaban una resolución firmada si el envío indicaba conflicto.
+- Alcance: preservar resultado financiero y resolución original; procesar conflicto de envío por separado en backend, Android y POS.
+- Commit: `fix(conciliacion): [TFG-C12-CO-01] preservar resoluciones finales ante conflictos`.
+- Antes: un envío alterado degradaba ACCEPTED/REJECTED. Ahora: devuelve conflicto del envío junto con estado financiero y resolución original; no cambia fila final, asientos ni marca de revisión. El POS valida esa resolución primero y usa el código firmado.
+- Archivos: `sync_v3.py`, `pos_desktop/backend_client.py`, este registro. Verificación: AST Python y revisión estática; solicitudes HTTP pendientes.
