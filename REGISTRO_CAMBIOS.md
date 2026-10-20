@@ -697,3 +697,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Límites: la migración de datos, transacciones concurrentes, firma/conciliación y la recuperación de la autorización demo permanecen sin validación ejecutada. Evidencia histórica cerrada sin sobre de cierre queda retenida y en revisión. El rechazo firmado aún no tiene un mecanismo de resolución administrativa; no libera fondos.
 - Commit: `fix(contabilidad): [TFG-C9-BE-01] conservar compromisos pendientes al renovar`.
 - Impacto académico: explicar vencimiento de emisión separado de conciliación; el saldo reservado por pagos pendientes sigue siendo propiedad del cliente, pero no gastable.
+
+## TFG-C11-BE-01 — Persistir resoluciones firmadas en POS
+- Fecha: 2026-10-20. Fase: C11 — Recuperación POS.
+- Estado: IMPLEMENTADA / VALIDACIÓN PENDIENTE.
+- Hallazgos: AUD-04, AUD-12, AUD-15.
+- Requisito: conservar localmente la resolución v3 verificada para recuperar estado después de reinicios.
+- Cambio: backend client valida firma y vínculos; conserva los bytes exactos del sobre; servicio de sincronización los pasa a SQLite en la misma actualización que el estado final. La migración aditiva 5→6 agrega `operations.resolution_envelope`; no altera operaciones ni evidencia existentes.
+- Archivos: `pos_desktop/database.py`, `pos_desktop/backend_client.py`, `pos_desktop/sync.py`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- Verificación: Python 3.13 `ast.parse` en los tres módulos y `git diff --check`; correctos. No se importó ni inició el POS, no se ejecutaron migraciones ni pruebas.
+- Límites: persistencia tras reinicio, migración histórica y reintentos pendientes de ejecución manual/agrupada; sintaxis no valida el contrato en ejecución.
+- Commit: `fix(pos): [TFG-C11-BE-01] persistir resoluciones firmadas`.
+- Impacto académico: una resolución final queda conservada con la evidencia POS; no se declara interoperabilidad física ni resultado de hardware.

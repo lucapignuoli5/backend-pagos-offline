@@ -111,8 +111,11 @@ class PosBackendClient:
                 status = "CONFLICT"
             else:
                 status = "PENDING_EVIDENCE"
+            resolution = None
+            if status in {"ACCEPTED", "REJECTED"}:
+                resolution = base64.b64decode(result["resolution_envelope_b64"], validate=True)
             normalized.append({"operation_id": result.get("operation_id"), "status": status,
-                               "code": result.get("code")})
+                               "code": result.get("code"), "resolution_envelope": resolution})
         return normalized
 
     def _valid_resolution(self, result: dict, evidence: dict | None) -> bool:

@@ -87,3 +87,8 @@ de código de forma incidental. Sin pruebas, compilación, instalación ni push.
 - Un pago pendiente incluido conserva su compromiso tras el cierre; un acuse tardío exacto puede conciliarse. Evidencia omitida o contradictoria bloquea nuevas autorizaciones.
 - La emisión reserva hasta el saldo libre real; el reintento de un request_id valida el cuerpo original y devuelve el grant existente. El balance incluye compromisos de todas las fases e historial de autorizaciones.
 - C9-BE-01 está IMPLEMENTADA / VALIDACIÓN PENDIENTE: únicamente análisis AST y revisión estática. Migración, HTTP, transacciones concurrentes y recuperación real no fueron ejecutados ni comprobados.
+
+## Resoluciones durables POS — C11 — 20/10/2026
+- La base POS migra aditivamente de esquema 5 a 6 y guarda los bytes de la resolución v3 después de validar firma y vínculo con solicitud, autorización y comprobante.
+- La aplicación aún debe invocar migración al abrir antes de leer operaciones; no se ejecutó esta migración durante la programación.
+- Sintaxis Python comprobada con AST aislado; no se ejecutó POS ni pruebas. Revisión funcional queda pendiente.

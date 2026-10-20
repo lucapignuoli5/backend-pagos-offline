@@ -17,6 +17,7 @@ class PosOperation:
     authorization_envelope: bytes | None
     receipt_envelope: bytes | None
     ack_envelope: bytes | None
+    resolution_envelope: bytes | None
     state: str
     created_at: str
     updated_at: str
@@ -42,7 +43,7 @@ class PosDatabase:
     def migrate(self) -> None:
         with closing(self.connect()) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 5:
+            if version > 6:
                 raise RuntimeError("La base POS fue creada por una version mas nueva")
             if version == 0:
                 db.executescript(
@@ -138,6 +139,16 @@ class PosDatabase:
                         PRIMARY KEY(key_id, fingerprint)
                     );
                     PRAGMA user_version=5;
+                    COMMIT;
+                    """
+                )
+                version = 5
+            if version == 5:
+                db.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+                    ALTER TABLE operations ADD COLUMN resolution_envelope BLOB;
+                    PRAGMA user_version=6;
                     COMMIT;
                     """
                 )
@@ -332,6 +343,7 @@ class PosDatabase:
     def apply_sync_result(
         self, operation_id: str, status: str, code: str | None,
         now: str, next_sync_at: str | None = None,
+        resolution_envelope: bytes | None = None,
     ) -> None:
         state = {
             "ACCEPTED": "SYNCED",
@@ -343,9 +355,11 @@ class PosDatabase:
                 """UPDATE operations SET state=?, updated_at=?,
                    sync_attempts=CASE WHEN ? IN ('PENDING_EVIDENCE','RETRYABLE_ERROR')
                                       THEN sync_attempts + 1 ELSE sync_attempts END,
-                   next_sync_at=?, last_sync_error=?
+                   next_sync_at=?, last_sync_error=?,
+                   resolution_envelope=CASE WHEN ? IN ('ACCEPTED','REJECTED')
+                                            THEN COALESCE(resolution_envelope, ?) ELSE resolution_envelope END
                    WHERE operation_id=? AND state='LOCALLY_ACCEPTED'""",
-                (state, now, status, next_sync_at, code, operation_id),
+                (state, now, status, next_sync_at, code, status, resolution_envelope, operation_id),
             )
             if result.rowcount != 1:
                 raise ValueError("Operacion POS no disponible para conciliacion")

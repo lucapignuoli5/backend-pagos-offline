@@ -64,7 +64,8 @@ class PosSyncService:
                 if status in {"PENDING_EVIDENCE", "RETRYABLE_ERROR"}:
                     next_at = self._timestamp(instant + self._backoff(operation.sync_attempts + 1))
                 self.database.apply_sync_result(
-                    operation.operation_id, status, code, self._timestamp(instant), next_at
+                    operation.operation_id, status, code, self._timestamp(instant), next_at,
+                    result.get("resolution_envelope"),
                 )
                 summary[status] = summary.get(status, 0) + 1
             return summary
