@@ -684,3 +684,16 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Resultado: inventario por área y general con tamaños, candidatos y consumidores. Código y scripts solo clasificados. Revisión automática bloqueó borrado de los cuatro APK en dos comandos; todos siguen presentes, sin espacio liberado ni eliminación alternativa.
 - Archivos del commit: INVENTARIO_LIMPIEZA_2026-10-19.md, AGENTS.md y REGISTRO_CAMBIOS.md; informes/registro general y académico fuera de estos repos. Solo documentación; sin pruebas, compilación ni instalación.
 - Asunto exacto: docs(limpieza): [TFG-C8-BE-09] inventariar scripts, cachés y código heredado.
+
+## TFG-C9-BE-01 — Compromisos retenidos y cierre parcial de autorizaciones
+- Fecha: 2026-10-20. Fase: C9 — Recuperación de autorizaciones y cupo.
+- Estado: IMPLEMENTADA / VALIDACIÓN PENDIENTE.
+- Hallazgos: AUD-01, AUD-04, AUD-06, AUD-12.
+- Requisito: cerrar una autorización vencida con manifiesto completo, liberar solo el importe nunca emitido y conservar comprometidos los pagos pendientes de acuse.
+- Comportamiento: cada comprobante autenticado queda registrado aunque todavía no tenga acuse; los índices duplicados y la evidencia contradictoria se conservan en revisión. El saldo retenido incluye todas las fases del compromiso. El cierre exige el conjunto completo de pagos y evidencia, se reintenta con los mismos bytes y libera solamente el presupuesto no emitido. La emisión nueva reserva hasta el saldo libre real y una repetición devuelve el grant original.
+- Datos y contrato: migración aditiva de compromisos y tabla `offline_commitment_claims`; campos `held_cents`, `released_unissued_cents`, `released_rejected_cents`, `phase` (OPEN/SEALED/SETTLED), sobre/manifiesto de cierre. `/api/wallets/{id}/balance` informa historial de autorizaciones. No se cambia el formato firmado v3 ni se modifica base alguna en esta entrega.
+- Archivos: `models.py`, `migrations.py`, `schemas.py`, `api_v2.py`, `api_v3.py`, `sync_v3.py`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- Verificación: análisis AST con Python 3.13 aislado de seis módulos y `git diff --check`; ambos correctos. Revisión estática del flujo de emisión, serialización por billetera, sincronización sin acuse, cierre, acuse tardío y saldo. No se ejecutaron pruebas, migraciones, importaciones, servidor, POS ni pagos.
+- Límites: la migración de datos, transacciones concurrentes, firma/conciliación y la recuperación de la autorización demo permanecen sin validación ejecutada. Evidencia histórica cerrada sin sobre de cierre queda retenida y en revisión. El rechazo firmado aún no tiene un mecanismo de resolución administrativa; no libera fondos.
+- Commit: `fix(contabilidad): [TFG-C9-BE-01] conservar compromisos pendientes al renovar`.
+- Impacto académico: explicar vencimiento de emisión separado de conciliación; el saldo reservado por pagos pendientes sigue siendo propiedad del cliente, pero no gastable.

@@ -18,10 +18,14 @@ from clock import utc_now
 from auth import get_current_user, require_role
 from database import get_db
 from issuer_keys import IssuerIdentity
-from protocol_v3 import parse_signed_envelope, payload_digest, validate_close_manifest, verify_authorization
+from protocol_v3 import (
+    parse_signed_envelope, parse_timestamp, payload_digest, validate_ack_binding, validate_close_manifest,
+    validate_receipt_binding, verify_authorization, verify_pos_signer,
+)
 from sync_v3 import process_evidence_v3
 from demo_events import event
 from issuer_trust import issuer_public_key, verify_trusted_authorization
+from revocation import requires_review
 from settings import LEGACY_INVENTORY_OPEN, MAX_OFFLINE_PAYMENTS, MAX_PAYMENT_CENTS, OFFLINE_AUTHORIZATION_SECONDS
 
 router = APIRouter(prefix="/api/v3")
@@ -131,19 +135,24 @@ def issue_authorization_v3(
     db: DbSession,
     user: Annotated[models.User, Depends(require_role("cliente"))],
 ):
-    if request.max_payment_cents > MAX_PAYMENT_CENTS or request.max_payments > MAX_OFFLINE_PAYMENTS:
-        raise HTTPException(422, "Limites de autorizacion excedidos")
     wallet = db.get(models.Wallet, request.wallet_id)
     key = db.get(models.RegisteredKey, request.wallet_key_id)
-    if wallet is None or wallet.user_id != user.id or key is None or key.revoked or key.wallet_id != wallet.id:
+    if wallet is None or wallet.user_id != user.id:
         raise HTTPException(403, "Billetera o clave no autorizada")
-    if wallet.offline_review_required:
-        raise HTTPException(409, "La billetera requiere revision contable")
     previous = db.query(models.OfflineAuthorization).filter_by(
         issuance_request_id=request.request_id
     ).one_or_none()
     if previous is not None:
         return _repeat_authorization(db, previous, request)
+    if request.max_payment_cents > MAX_PAYMENT_CENTS or request.max_payments > MAX_OFFLINE_PAYMENTS:
+        raise HTTPException(422, "Limites de autorizacion excedidos")
+    if key is None or key.revoked or key.wallet_id != wallet.id:
+        raise HTTPException(403, "Billetera o clave no autorizada")
+    if wallet.offline_review_required:
+        raise HTTPException(409, detail={
+            "code": "WALLET_REVIEW_REQUIRED",
+            "message": "La billetera requiere revision contable",
+        })
     issuer_path = os.getenv("ISSUER_KEY_PATH")
     issuer_pin = os.getenv("ISSUER_KEY_FINGERPRINT")
     if not issuer_path or not issuer_pin:
@@ -153,7 +162,9 @@ def issue_authorization_v3(
     except Exception as exc:
         raise HTTPException(503, "Emisor v3 no disponible") from exc
     now = utc_now().replace(microsecond=0)
-    total = request.max_payment_cents * request.max_payments
+    requested_total = request.max_payment_cents * request.max_payments
+    if requested_total > 2**63 - 1:
+        raise HTTPException(422, detail={"code": "AUTHORIZATION_LIMIT_EXCEEDED"})
     locked = db.execute(
         update(models.Wallet).where(models.Wallet.id == wallet.id).values(
             confirmed_balance_cents=models.Wallet.confirmed_balance_cents
@@ -163,17 +174,34 @@ def issue_authorization_v3(
         db.rollback()
         raise HTTPException(409, "No se pudo reservar el presupuesto offline")
     db.refresh(wallet)
-    committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents), 0)).filter(
-        models.OfflineCommitment.wallet_id == wallet.id, models.OfflineCommitment.closed.is_(False)
+    if wallet.offline_review_required:
+        db.rollback()
+        raise HTTPException(409, detail={
+            "code": "WALLET_REVIEW_REQUIRED",
+            "message": "La billetera requiere revision contable",
+        })
+    if wallet.offline_review_required:
+        db.rollback()
+        raise HTTPException(409, detail={
+            "code": "WALLET_REVIEW_REQUIRED",
+            "message": "La billetera requiere revision contable",
+        })
+    committed = int(db.query(func.coalesce(func.sum(models.OfflineCommitment.held_cents), 0)).filter(
+        models.OfflineCommitment.wallet_id == wallet.id
     ).scalar())
     committed += int(db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
         models.OfflineAuthorization.wallet_id == wallet.id,
         models.OfflineAuthorization.active.is_(True),
         ~models.OfflineAuthorization.id.in_(select(models.OfflineCommitment.authorization_id)),
     ).scalar())
-    if wallet.offline_review_required or wallet.confirmed_balance_cents - committed < total:
+    available = max(wallet.confirmed_balance_cents - committed, 0)
+    total = min(available, requested_total)
+    if total <= 0:
         db.rollback()
-        raise HTTPException(409, "Saldo insuficiente para compromiso")
+        raise HTTPException(409, detail={
+            "code": "AUTHORIZATION_BUDGET_UNAVAILABLE",
+            "message": "No hay saldo libre para una nueva autorizacion offline",
+        })
     auth_id = str(uuid4())
     expires = now + timedelta(seconds=OFFLINE_AUTHORIZATION_SECONDS)
     payload = {
@@ -191,7 +219,7 @@ def issue_authorization_v3(
         max_payment_cents=request.max_payment_cents, remaining_amount_cents=total,
         remaining_payments=request.max_payments, issued_at=now, expires_at=expires, active=True))
     db.add(models.OfflineCommitment(authorization_id=auth_id, wallet_id=wallet.id, reserved_cents=total,
-        authorization_envelope=signed))
+        held_cents=total, authorization_envelope=signed))
     try:
         db.commit()
     except IntegrityError as exc:
@@ -242,32 +270,114 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
         if close.payload["authorization_id"] != authorization_id:
             raise ValueError("authorization")
         if commitment.closed:
-            if commitment.closure_id == close.payload["closure_id"]:
+            if (commitment.closure_id == close.payload["closure_id"]
+                    and commitment.closure_envelope == base64.b64decode(request.close_envelope_b64, validate=True)
+                    and commitment.closure_manifest == manifest):
                 return commitment
             raise HTTPException(409, "Autorizacion cerrada con otra evidencia")
-        if sum(int(entry["amount_cents"]) for entry in entries) != commitment.emitted_cents:
-            raise ValueError("manifest")
+        claims = db.query(models.CommitmentClaim).filter_by(
+            authorization_id=authorization_id
+        ).order_by(models.CommitmentClaim.issuance_index, models.CommitmentClaim.operation_id).all()
+        payments = db.query(models.OfflinePaymentV2).filter_by(
+            authorization_id=authorization_id
+        ).all()
+        claim_by_operation = {claim.operation_id: claim for claim in claims}
+        entry_by_operation = {entry["operation_id"]: entry for entry in entries}
+        if (len(claims) != len(entries) or len(payments) != len(entries)
+                or set(claim_by_operation) != set(entry_by_operation)
+                or {payment.operation_id for payment in payments} != set(entry_by_operation)):
+            raise ValueError("manifest incompleto o con evidencia omitida")
+        if len({claim.issuance_index for claim in claims}) != len(claims):
+            wallet.offline_review_required = True
+            db.commit()
+            raise HTTPException(409, detail={"code": "ISSUANCE_INDEX_CONFLICT"})
+        payment_by_operation = {payment.operation_id: payment for payment in payments}
+        accepted_total = 0
         for entry in entries:
-            emission = db.query(models.CommitmentEmission).filter_by(
-                authorization_id=authorization_id,
-                operation_id=entry["operation_id"],
-                issuance_index=entry["issuance_index"],
-            ).one_or_none()
-            payment = db.get(models.OfflinePaymentV2, entry["operation_id"])
-            if (emission is None or payment is None or payment.state != "ACCEPTED"
-                    or emission.amount_cents != entry["amount_cents"]
-                    or payload_digest(parse_signed_envelope(payment.receipt_envelope)) != entry["receipt_digest"]):
+            claim = claim_by_operation.get(entry["operation_id"])
+            payment = payment_by_operation.get(entry["operation_id"])
+            if claim is None or payment is None:
                 raise ValueError("manifest evidence")
+            request_wire = bytes(payment.request_envelope)
+            receipt_wire = bytes(payment.receipt_envelope)
+            request_envelope = parse_signed_envelope(request_wire)
+            receipt_envelope = parse_signed_envelope(receipt_wire)
+            pos_key = db.get(models.RegisteredKey, request_envelope.payload["pos_key_id"])
+            terminal = db.get(models.Terminal, payment.terminal_id)
+            wallet_key = db.get(models.RegisteredKey, grant.payload["wallet_key_id"])
+            if (claim.issuance_index != entry["issuance_index"]
+                    or claim.amount_cents != entry["amount_cents"]
+                    or claim.receipt_digest != entry["receipt_digest"]
+                    or payment.amount_cents != entry["amount_cents"]
+                    or payment.wallet_id != wallet.id
+                    or payment.authorization_id != authorization_id
+                    or payment.merchant_id != request_envelope.payload["merchant_id"]
+                    or payment.terminal_id != request_envelope.payload["terminal_id"]
+                    or payment.currency != request_envelope.payload["currency"]
+                    or payload_digest(receipt_envelope) != entry["receipt_digest"]):
+                raise ValueError("manifest distinto de evidencia registrada")
+            validate_receipt_binding(request_envelope, receipt_envelope, grant)
+            if (pos_key is None or terminal is None
+                    or pos_key.terminal_id != terminal.id
+                    or not verify_pos_signer(request_envelope, pos_key.public_key_b64, pos_key.key_id,
+                                             pos_key.fingerprint, terminal.merchant_id, terminal.id)):
+                raise ValueError("firma o alcance POS invalido")
+            if (wallet_key is None or wallet_key.wallet_id != wallet.id or wallet_key.purpose != "wallet"
+                    or wallet_key.fingerprint != grant.payload["wallet_key_fingerprint"]
+                    or wallet_key.public_key_b64 != grant.payload["wallet_public_key_b64"]):
+                raise ValueError("clave de billetera desconocida")
+            issued_at = parse_timestamp(request_envelope.payload["issued_at"])
+            confirmed_at = parse_timestamp(receipt_envelope.payload["confirmed_at"])
+            if requires_review(pos_key, issued_at) or requires_review(wallet_key, confirmed_at):
+                wallet.offline_review_required = True
+                db.commit()
+                raise HTTPException(409, detail={"code": "EVIDENCE_REVOCATION_REVIEW"})
+            if payment.ack_envelope is not None:
+                ack = parse_signed_envelope(bytes(payment.ack_envelope))
+                validate_ack_binding(request_envelope, receipt_envelope, ack)
+                if not verify_pos_signer(ack, pos_key.public_key_b64, pos_key.key_id,
+                                         pos_key.fingerprint, terminal.merchant_id, terminal.id):
+                    raise ValueError("firma de acuse invalida")
+                if requires_review(pos_key, parse_timestamp(ack.payload["accepted_at"])):
+                    wallet.offline_review_required = True
+                    db.commit()
+                    raise HTTPException(409, detail={"code": "ACK_REVOCATION_REVIEW"})
+            if payment.state == "ACCEPTED":
+                accepted_total += payment.amount_cents
+            elif payment.state not in {"PENDING_EVIDENCE", "VALIDATED"}:
+                raise ValueError("operacion en revision; no se libera presupuesto")
+        total_issued = sum(int(entry["amount_cents"]) for entry in entries)
+        expected_held_before_close = (
+            commitment.reserved_cents - commitment.emitted_cents
+            - commitment.released_rejected_cents - commitment.released_unissued_cents
+        )
+        if (accepted_total != commitment.emitted_cents
+                or total_issued > commitment.reserved_cents
+                or total_issued < commitment.emitted_cents
+                or commitment.held_cents != expected_held_before_close
+                or commitment.released_unissued_cents != 0):
+            raise ValueError("invariante contable del manifiesto")
     except HTTPException:
         db.rollback()
         raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(422, "Cierre invalido") from exc
+    unissued = commitment.reserved_cents - total_issued
+    remaining_held = commitment.held_cents - unissued
     closed = db.execute(update(models.OfflineCommitment).where(
         models.OfflineCommitment.authorization_id == authorization_id,
         models.OfflineCommitment.closed.is_(False),
-    ).values(closed=True, closure_id=close.payload["closure_id"]))
+    ).values(
+        closed=True,
+        phase="SETTLED" if remaining_held == 0 else "SEALED",
+        released_unissued_cents=unissued,
+        held_cents=remaining_held,
+        closure_id=close.payload["closure_id"],
+        closure_envelope=base64.b64decode(request.close_envelope_b64, validate=True),
+        closure_manifest=manifest,
+        manifest_digest=payload_digest(manifest),
+    ))
     if closed.rowcount != 1:
         db.rollback()
         current = db.get(models.OfflineCommitment, authorization_id)
@@ -375,13 +485,20 @@ def _authorize_payment_participant(db: Session, user: models.User,
 def _repeat_authorization(db: Session, previous: models.OfflineAuthorization,
                           request: schemas.OfflineAuthorizationV3Request):
     commitment = db.get(models.OfflineCommitment, previous.id)
+    try:
+        grant = parse_signed_envelope(commitment.authorization_envelope if commitment else b"")
+    except Exception:
+        grant = None
     same = (
         previous.wallet_id == request.wallet_id
         and previous.wallet_key_id == request.wallet_key_id
         and previous.max_payment_cents == request.max_payment_cents
-        and previous.remaining_payments <= request.max_payments
+        and grant is not None
+        and grant.payload.get("max_payments") == request.max_payments
+        and grant.payload.get("max_payment_cents") == request.max_payment_cents
+        and grant.payload.get("wallet_id") == request.wallet_id
+        and grant.payload.get("wallet_key_id") == request.wallet_key_id
         and commitment is not None
-        and commitment.reserved_cents == request.max_payment_cents * request.max_payments
         and commitment.authorization_envelope is not None
     )
     if not same:

@@ -244,6 +244,9 @@ class OfflineCommitment(Base):
     __table_args__ = (
         CheckConstraint("reserved_cents >= 0", name="ck_commitment_reserved_nonnegative"),
         CheckConstraint("emitted_cents >= 0", name="ck_commitment_emitted_nonnegative"),
+        CheckConstraint("held_cents >= 0", name="ck_commitment_held_nonnegative"),
+        CheckConstraint("released_unissued_cents >= 0", name="ck_commitment_unissued_nonnegative"),
+        CheckConstraint("released_rejected_cents >= 0", name="ck_commitment_rejected_nonnegative"),
     )
 
     authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), primary_key=True)
@@ -251,8 +254,15 @@ class OfflineCommitment(Base):
     reserved_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     emitted_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     emitted_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    held_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    released_unissued_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    released_rejected_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    phase: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN", server_default="OPEN")
     closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     closure_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
+    closure_envelope: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    closure_manifest: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    manifest_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     authorization_envelope: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -268,6 +278,24 @@ class CommitmentEmission(Base):
     operation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     issuance_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CommitmentClaim(Base):
+    """Durable evidence that an authorization index was issued, even before ACK."""
+    __tablename__ = "offline_commitment_claims"
+    __table_args__ = (
+        UniqueConstraint("authorization_id", "operation_id", name="uq_commitment_claim_operation"),
+        CheckConstraint("issuance_index > 0", name="ck_commitment_claim_index_positive"),
+        CheckConstraint("amount_cents > 0", name="ck_commitment_claim_amount_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    authorization_id: Mapped[str] = mapped_column(ForeignKey("offline_authorizations.id"), nullable=False, index=True)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    issuance_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    receipt_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

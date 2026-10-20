@@ -19,7 +19,7 @@ from issuer_trust import verify_trusted_authorization
 from revocation import requires_review
 from protocol_v3 import parse_timestamp
 from protocol_v3 import (
-    MessageType, ProtocolError, parse_signed_envelope, validate_ack_binding,
+    MessageType, ProtocolError, parse_close_manifest, parse_signed_envelope, validate_ack_binding,
     payload_digest, validate_receipt_binding, verify_authorization, verify_pos_signer,
 )
 
@@ -46,13 +46,24 @@ def process_evidence_v3(db: Session, user: models.User,
 
         existing = db.get(models.OfflinePaymentV2, operation_id)
         if existing is not None:
+            _authorize(db, user, existing.wallet_id, existing.terminal_id)
             if existing.request_envelope != request_wire or existing.receipt_envelope != receipt_wire:
-                db.rollback()
+                wallet_id = existing.wallet_id
+                db.execute(update(models.Wallet).where(models.Wallet.id == wallet_id).values(
+                    offline_review_required=True
+                ))
+                existing.state = "PENDING_REVIEW"
+                existing.rejection_code = "CONTENT_MISMATCH"
+                db.commit()
                 return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "CONTENT_MISMATCH")
             if existing.ack_envelope is not None and ack_wire is not None and existing.ack_envelope != ack_wire:
-                db.rollback()
+                db.execute(update(models.Wallet).where(models.Wallet.id == existing.wallet_id).values(
+                    offline_review_required=True
+                ))
+                existing.state = "PENDING_REVIEW"
+                existing.rejection_code = "ACK_MISMATCH"
+                db.commit()
                 return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False, "ACK_MISMATCH")
-            _authorize(db, user, existing.wallet_id, existing.terminal_id)
             if existing.state in {"ACCEPTED", "REJECTED"}:
                 known_grant = db.get(models.OfflineCommitment, existing.authorization_id)
                 if known_grant is None or known_grant.authorization_envelope != grant_wire:
@@ -80,6 +91,36 @@ def process_evidence_v3(db: Session, user: models.User,
             db, request, grant, grant_wire, receipt, ack_wire
         )
         _authorize(db, user, wallet.id, terminal.id)
+        issuance_index = receipt.payload["issuance_index"]
+        receipt_payload_digest = payload_digest(receipt)
+        if commitment.closed:
+            manifest_entries = parse_close_manifest(bytes(commitment.closure_manifest or b"[]"))
+            manifest_entry = next((entry for entry in manifest_entries
+                                   if entry["operation_id"] == operation_id), None)
+            if (manifest_entry is None
+                    or manifest_entry["issuance_index"] != issuance_index
+                    or manifest_entry["amount_cents"] != receipt.payload["amount_cents"]
+                    or manifest_entry["receipt_digest"] != receipt_payload_digest):
+                wallet.offline_review_required = True
+                if existing is None:
+                    existing = models.OfflinePaymentV2(
+                        operation_id=operation_id, wallet_id=wallet.id,
+                        merchant_id=request.payload["merchant_id"], terminal_id=terminal.id,
+                        authorization_id=authorization.id, amount_cents=request.payload["amount_cents"],
+                        currency=request.payload["currency"], nonce=request.payload["nonce"],
+                        request_envelope=request_wire, receipt_envelope=receipt_wire,
+                        ack_envelope=ack_wire, state="PENDING_REVIEW",
+                        rejection_code="EVIDENCE_OMITTED_FROM_CLOSURE",
+                    )
+                    db.add(existing)
+                else:
+                    existing.state = "PENDING_REVIEW"
+                    existing.rejection_code = "EVIDENCE_OMITTED_FROM_CLOSURE"
+                _record_claim(db, authorization.id, operation_id, issuance_index,
+                              receipt.payload["amount_cents"], receipt_payload_digest)
+                db.commit()
+                return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
+                               "EVIDENCE_OMITTED_FROM_CLOSURE")
         if review or (existing is not None and existing.state == "PENDING_REVIEW"):
             if existing is None:
                 db.add(models.OfflinePaymentV2(
@@ -91,8 +132,16 @@ def process_evidence_v3(db: Session, user: models.User,
                     ack_envelope=ack_wire, state="PENDING_REVIEW",
                     rejection_code="REVOCATION_REVIEW",
                 ))
+                conflict = _record_claim(db, authorization.id, operation_id, issuance_index,
+                                         receipt.payload["amount_cents"], receipt_payload_digest)
             else:
                 existing.state = "PENDING_REVIEW"
+                conflict = _record_claim(db, authorization.id, operation_id, issuance_index,
+                                         receipt.payload["amount_cents"], receipt_payload_digest)
+            if conflict:
+                wallet.offline_review_required = True
+                if existing is not None:
+                    existing.rejection_code = "ISSUANCE_INDEX_REUSED"
             db.commit()
             return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False, "REVOCATION_REVIEW")
         if commitment.closed and existing is None:
@@ -106,6 +155,8 @@ def process_evidence_v3(db: Session, user: models.User,
                 ack_envelope=ack_wire, state="PENDING_REVIEW",
                 rejection_code="EVIDENCE_OMITTED_FROM_CLOSURE",
             ))
+            _record_claim(db, authorization.id, operation_id, issuance_index,
+                          receipt.payload["amount_cents"], receipt_payload_digest)
             db.commit()
             return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
                            "EVIDENCE_OMITTED_FROM_CLOSURE")
@@ -121,9 +172,37 @@ def process_evidence_v3(db: Session, user: models.User,
             )
             db.add(payment)
             db.flush()
+            index_conflict = _record_claim(db, authorization.id, operation_id, issuance_index,
+                                           receipt.payload["amount_cents"], receipt_payload_digest)
+            if index_conflict:
+                payment.state = "PENDING_REVIEW"
+                payment.rejection_code = "ISSUANCE_INDEX_REUSED"
+                wallet.offline_review_required = True
+                db.commit()
+                return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False,
+                               "ISSUANCE_INDEX_REUSED")
         elif ack_wire is not None and payment.ack_envelope is None:
             payment.ack_envelope = ack_wire
             payment.state = "VALIDATED"
+            index_conflict = _record_claim(db, authorization.id, operation_id, issuance_index,
+                                           receipt.payload["amount_cents"], receipt_payload_digest)
+            if index_conflict:
+                payment.state = "PENDING_REVIEW"
+                payment.rejection_code = "ISSUANCE_INDEX_REUSED"
+                wallet.offline_review_required = True
+                db.commit()
+                return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False,
+                               "ISSUANCE_INDEX_REUSED")
+        else:
+            index_conflict = _record_claim(db, authorization.id, operation_id, issuance_index,
+                                           receipt.payload["amount_cents"], receipt_payload_digest)
+            if index_conflict:
+                payment.state = "PENDING_REVIEW"
+                payment.rejection_code = "ISSUANCE_INDEX_REUSED"
+                wallet.offline_review_required = True
+                db.commit()
+                return _result(operation_id, "CONFLICT", "PENDING_REVIEW", False,
+                               "ISSUANCE_INDEX_REUSED")
         if ack_wire is None:
             db.commit()
             return _result(operation_id, "VALIDATED", "PENDING_EVIDENCE", False, "ACK_REQUIRED")
@@ -187,6 +266,11 @@ def _validate(db, request, grant, grant_wire, receipt, ack_wire):
 
 
 def _apply(db, payment, wallet, merchant_wallet, authorization, commitment, issuance_index):
+    operation_id = payment.operation_id
+    wallet_id = payment.wallet_id
+    request_wire = bytes(payment.request_envelope)
+    receipt_wire = bytes(payment.receipt_envelope)
+    ack_wire = bytes(payment.ack_envelope) if payment.ack_envelope is not None else None
     amount = payment.amount_cents
     duplicate = db.query(models.CommitmentEmission).filter_by(
         authorization_id=authorization.id, issuance_index=issuance_index,
@@ -209,16 +293,54 @@ def _apply(db, payment, wallet, merchant_wallet, authorization, commitment, issu
         ).values(confirmed_balance_cents=models.Wallet.confirmed_balance_cents - amount)),
         db.execute(update(models.OfflineCommitment).where(
             models.OfflineCommitment.authorization_id == commitment.authorization_id,
+            models.OfflineCommitment.held_cents >= amount,
             models.OfflineCommitment.emitted_cents + amount <= models.OfflineCommitment.reserved_cents,
         ).values(
             emitted_cents=models.OfflineCommitment.emitted_cents + amount,
             emitted_count=models.OfflineCommitment.emitted_count + 1,
+            held_cents=models.OfflineCommitment.held_cents - amount,
         )),
     )
     if any(item.rowcount != 1 for item in updates):
         db.rollback()
-        return _result(payment.operation_id, "VALIDATED", "PENDING_REVIEW", False,
+        persisted_payment = db.get(models.OfflinePaymentV2, operation_id)
+        persisted_wallet = db.get(models.Wallet, wallet_id)
+        if persisted_payment is not None and persisted_wallet is not None:
+            persisted_payment.state = "PENDING_REVIEW"
+            persisted_payment.rejection_code = "INSUFFICIENT_COMMITMENT_OR_BALANCE"
+            if ack_wire is not None:
+                persisted_payment.ack_envelope = ack_wire
+            persisted_wallet.offline_review_required = True
+        else:
+            receipt = parse_signed_envelope(receipt_wire)
+            request = parse_signed_envelope(request_wire)
+            db.add(models.OfflinePaymentV2(
+                operation_id=operation_id, wallet_id=wallet_id,
+                merchant_id=request.payload["merchant_id"], terminal_id=request.payload["terminal_id"],
+                authorization_id=authorization.id, amount_cents=amount,
+                currency=request.payload["currency"], nonce=request.payload["nonce"],
+                request_envelope=request_wire, receipt_envelope=receipt_wire,
+                ack_envelope=ack_wire, state="PENDING_REVIEW",
+                rejection_code="INSUFFICIENT_COMMITMENT_OR_BALANCE",
+            ))
+            persisted_wallet = db.get(models.Wallet, wallet_id)
+            if persisted_wallet is not None:
+                persisted_wallet.offline_review_required = True
+        claim = db.query(models.CommitmentClaim).filter_by(
+            authorization_id=authorization.id, operation_id=operation_id
+        ).one_or_none()
+        if claim is None:
+            db.add(models.CommitmentClaim(
+                authorization_id=authorization.id, operation_id=operation_id,
+                issuance_index=issuance_index, amount_cents=amount,
+                receipt_digest=payload_digest(parse_signed_envelope(receipt_wire)),
+            ))
+        db.commit()
+        return _result(operation_id, "VALIDATED", "PENDING_REVIEW", False,
                        "INSUFFICIENT_COMMITMENT_OR_BALANCE")
+    db.refresh(commitment)
+    if commitment.closed and commitment.held_cents == 0:
+        commitment.phase = "SETTLED"
     db.add(models.CommitmentEmission(
         authorization_id=authorization.id, operation_id=payment.operation_id,
         issuance_index=issuance_index, amount_cents=amount,
@@ -280,6 +402,31 @@ def _wire(value: str) -> bytes:
     if not data or len(data) > 4096:
         raise ValueError("wire")
     return data
+
+
+def _record_claim(db: Session, authorization_id: str, operation_id: str,
+                  issuance_index: int, amount_cents: int, receipt_digest: str) -> bool:
+    """Persist every authenticated issuance claim; return index-collision status."""
+    existing = db.query(models.CommitmentClaim).filter_by(
+        authorization_id=authorization_id, operation_id=operation_id
+    ).one_or_none()
+    if existing is not None:
+        if (existing.issuance_index != issuance_index or existing.amount_cents != amount_cents
+                or existing.receipt_digest != receipt_digest):
+            return True
+    else:
+        db.add(models.CommitmentClaim(
+            authorization_id=authorization_id, operation_id=operation_id,
+            issuance_index=issuance_index, amount_cents=amount_cents,
+            receipt_digest=receipt_digest,
+        ))
+        db.flush()
+    other = db.query(models.CommitmentClaim).filter(
+        models.CommitmentClaim.authorization_id == authorization_id,
+        models.CommitmentClaim.issuance_index == issuance_index,
+        models.CommitmentClaim.operation_id != operation_id,
+    ).first()
+    return other is not None
 
 
 def _result(operation_id, submission, operation, final, code=None, resolution=None):

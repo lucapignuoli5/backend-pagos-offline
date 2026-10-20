@@ -256,14 +256,9 @@ def get_wallet_balance(wallet_id: str, db: DbSession, user: CurrentUser) -> sche
         raise HTTPException(status_code=404, detail="Billetera no encontrada")
     if wallet.user_id != user.id:
         raise HTTPException(status_code=403, detail="Billetera no autorizada")
-    committed_v3 = int(
-        db.query(func.coalesce(func.sum(
-            models.OfflineCommitment.reserved_cents - models.OfflineCommitment.emitted_cents
-        ), 0)).filter(
-            models.OfflineCommitment.wallet_id == wallet.id,
-            models.OfflineCommitment.closed.is_(False),
-        ).scalar()
-    )
+    committed_v3 = int(db.query(func.coalesce(func.sum(
+        models.OfflineCommitment.held_cents
+    ), 0)).filter(models.OfflineCommitment.wallet_id == wallet.id).scalar())
     committed_legacy = int(
         db.query(func.coalesce(func.sum(models.OfflineAuthorization.remaining_amount_cents), 0)).filter(
             models.OfflineAuthorization.wallet_id == wallet.id,
@@ -272,12 +267,16 @@ def get_wallet_balance(wallet_id: str, db: DbSession, user: CurrentUser) -> sche
         ).scalar()
     )
     authorized = committed_v3 + committed_legacy
+    has_authorization_history = db.query(models.OfflineAuthorization.id).filter(
+        models.OfflineAuthorization.wallet_id == wallet.id
+    ).first() is not None
     return schemas.WalletBalanceResponse(
         wallet_id=wallet.id,
         confirmed_balance_cents=wallet.confirmed_balance_cents,
         authorized_offline_cents=authorized,
         available_for_authorization_cents=max(wallet.confirmed_balance_cents - authorized, 0),
         review_required=wallet.offline_review_required,
+        has_authorization_history=has_authorization_history,
     )
 
 

@@ -107,6 +107,105 @@ def run_schema_migrations(engine: Engine) -> None:
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_offline_authorization_issuance_request "
                     "ON offline_authorizations(issuance_request_id) WHERE issuance_request_id IS NOT NULL"
                 ))
+    inspector = inspect(engine)
+    if "offline_commitments" in inspector.get_table_names():
+        commitment_columns = {column["name"] for column in inspector.get_columns("offline_commitments")}
+        additions = {
+            "held_cents": "INTEGER NOT NULL DEFAULT 0",
+            "released_unissued_cents": "INTEGER NOT NULL DEFAULT 0",
+            "released_rejected_cents": "INTEGER NOT NULL DEFAULT 0",
+            "phase": "VARCHAR(20) NOT NULL DEFAULT 'OPEN'",
+            "closure_envelope": "BLOB",
+            "closure_manifest": "BLOB",
+            "manifest_digest": "VARCHAR(64)",
+        }
+        with engine.begin() as connection:
+            for name, declaration in additions.items():
+                if name not in commitment_columns:
+                    connection.execute(text(
+                        f"ALTER TABLE offline_commitments ADD COLUMN {name} {declaration}"
+                    ))
+            connection.execute(text(
+                "UPDATE offline_commitments SET held_cents = "
+                "CASE WHEN held_cents = 0 AND reserved_cents >= emitted_cents "
+                "AND released_unissued_cents = 0 AND released_rejected_cents = 0 "
+                "THEN reserved_cents - emitted_cents ELSE held_cents END"
+            ))
+            connection.execute(text(
+                "UPDATE offline_commitments SET phase = CASE WHEN closed = 1 "
+                "AND phase != 'SETTLED' THEN 'SEALED' "
+                "WHEN closed = 0 AND phase != 'SETTLED' THEN 'OPEN' ELSE phase END"
+            ))
+            # Older closures did not persist signed closure evidence. Keep their
+            # unresolved amount held and require explicit accounting review.
+            connection.execute(text(
+                "UPDATE wallets SET offline_review_required = 1 WHERE id IN ("
+                "SELECT wallet_id FROM offline_commitments "
+                "WHERE closed = 1 AND held_cents > 0 AND closure_envelope IS NULL)"
+            ))
+
+    inspector = inspect(engine)
+    if {"offline_authorizations", "offline_commitments", "offline_payments_v2"}.issubset(
+        set(inspector.get_table_names())
+    ):
+        with engine.begin() as connection:
+            connection.execute(text(
+                "CREATE TABLE IF NOT EXISTS offline_commitment_claims ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "authorization_id VARCHAR(120) NOT NULL, operation_id VARCHAR(36) NOT NULL, "
+                "issuance_index INTEGER NOT NULL CHECK (issuance_index > 0), "
+                "amount_cents INTEGER NOT NULL CHECK (amount_cents > 0), "
+                "receipt_digest VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "CONSTRAINT uq_commitment_claim_operation UNIQUE (authorization_id, operation_id), "
+                "FOREIGN KEY(authorization_id) REFERENCES offline_authorizations(id))"
+            ))
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_offline_commitment_claims_authorization_id "
+                "ON offline_commitment_claims(authorization_id)"
+            ))
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_offline_commitment_claims_operation_id "
+                "ON offline_commitment_claims(operation_id)"
+            ))
+        _backfill_commitment_claims(engine)
+
+
+def _backfill_commitment_claims(engine: Engine) -> None:
+    """Preserve parseable historical v3 receipts as claims; flag any ambiguity."""
+    from protocol_v3 import parse_signed_envelope, payload_digest
+
+    with engine.begin() as connection:
+        rows = connection.execute(text(
+            "SELECT p.operation_id, p.authorization_id, p.wallet_id, p.amount_cents, "
+            "p.receipt_envelope FROM offline_payments_v2 p "
+            "JOIN offline_commitments c ON c.authorization_id = p.authorization_id "
+            "WHERE NOT EXISTS (SELECT 1 FROM offline_commitment_claims cc "
+            "WHERE cc.authorization_id = p.authorization_id AND cc.operation_id = p.operation_id)"
+        )).mappings().all()
+        for row in rows:
+            try:
+                receipt = parse_signed_envelope(bytes(row["receipt_envelope"]))
+                payload = receipt.payload
+                if (payload.get("operation_id") != row["operation_id"]
+                        or payload.get("offline_authorization_id") != row["authorization_id"]
+                        or payload.get("wallet_id") != row["wallet_id"]
+                        or payload.get("amount_cents") != row["amount_cents"]):
+                    raise ValueError("receipt does not match persisted payment")
+                connection.execute(text(
+                    "INSERT OR IGNORE INTO offline_commitment_claims "
+                    "(authorization_id, operation_id, issuance_index, amount_cents, receipt_digest) "
+                    "VALUES (:authorization_id, :operation_id, :issuance_index, :amount_cents, :receipt_digest)"
+                ), {
+                    "authorization_id": row["authorization_id"],
+                    "operation_id": row["operation_id"],
+                    "issuance_index": int(payload["issuance_index"]),
+                    "amount_cents": int(payload["amount_cents"]),
+                    "receipt_digest": payload_digest(receipt),
+                })
+            except Exception:
+                connection.execute(text(
+                    "UPDATE wallets SET offline_review_required = 1 WHERE id = :wallet_id"
+                ), {"wallet_id": row["wallet_id"]})
 
 
 def backfill_wallets(db: Session) -> int:

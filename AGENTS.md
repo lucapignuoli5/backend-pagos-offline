@@ -79,3 +79,11 @@ El usuario autorizó borrar APK generados, pero la revisión automática rechaz�
 ambos comandos antes de ejecutar. Los cuatro APK Android/demo siguen presentes;
 no afirmar que se borraron ni que se liberó espacio. No ejecutar las propuestas
 de código de forma incidental. Sin pruebas, compilación, instalación ni push.
+
+## Recuperación de autorizaciones C9 — 20/10/2026
+
+- El backend implementa campos `held_cents`, liberación no emitida/rechazada y fase OPEN/SEALED/SETTLED; `offline_commitment_claims` registra comprobantes v3 validados aunque falte el acuse.
+- El cierre requiere coincidencia del manifiesto firmado con todas las operaciones y evidencias conocidas, verifica alcance/firmas/revocación efectiva, conserva los bytes para reintento y libera solo el presupuesto no emitido.
+- Un pago pendiente incluido conserva su compromiso tras el cierre; un acuse tardío exacto puede conciliarse. Evidencia omitida o contradictoria bloquea nuevas autorizaciones.
+- La emisión reserva hasta el saldo libre real; el reintento de un request_id valida el cuerpo original y devuelve el grant existente. El balance incluye compromisos de todas las fases e historial de autorizaciones.
+- C9-BE-01 está IMPLEMENTADA / VALIDACIÓN PENDIENTE: únicamente análisis AST y revisión estática. Migración, HTTP, transacciones concurrentes y recuperación real no fueron ejecutados ni comprobados.

@@ -165,6 +165,7 @@ class WalletBalanceResponse(BaseModel):
     authorized_offline_cents: int
     available_for_authorization_cents: int
     review_required: bool = False
+    has_authorization_history: bool = False
 
 
 class OfflinePaymentEvidence(BaseModel):
@@ -238,6 +239,12 @@ class OfflineCommitmentResponse(BaseModel):
     emitted_cents: int
     emitted_count: int
     closed: bool
+    held_cents: int = 0
+    released_unissued_cents: int = 0
+    released_rejected_cents: int = 0
+    phase: str = "OPEN"
+    closure_id: Optional[str] = None
+    manifest_digest: Optional[str] = None
 
 class OfflineAuthorizationCloseRequest(BaseModel):
     close_envelope_b64: str = Field(..., min_length=1, max_length=8192)
