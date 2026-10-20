@@ -206,6 +206,15 @@ def _backfill_commitment_claims(engine: Engine) -> None:
                 connection.execute(text(
                     "UPDATE wallets SET offline_review_required = 1 WHERE id = :wallet_id"
                 ), {"wallet_id": row["wallet_id"]})
+        # Existing claims must be checked too: a previous backfill may have
+        # preserved multiple authenticated receipts for one issuance index.
+        connection.execute(text(
+            "UPDATE wallets SET offline_review_required = 1 WHERE id IN ("
+            "SELECT c.wallet_id FROM offline_commitments c "
+            "JOIN offline_commitment_claims cc ON cc.authorization_id = c.authorization_id "
+            "GROUP BY c.wallet_id, cc.authorization_id, cc.issuance_index "
+            "HAVING COUNT(DISTINCT cc.operation_id) > 1)"
+        ))
 
 
 def backfill_wallets(db: Session) -> int:

@@ -709,3 +709,11 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Límites: persistencia tras reinicio, migración histórica y reintentos pendientes de ejecución manual/agrupada; sintaxis no valida el contrato en ejecución.
 - Commit: `fix(pos): [TFG-C11-BE-01] persistir resoluciones firmadas`.
 - Impacto académico: una resolución final queda conservada con la evidencia POS; no se declara interoperabilidad física ni resultado de hardware.
+
+## TFG-C12-BE-01 — Detectar índices históricos duplicados y preparar recuperación
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: el backfill conservaba claims contradictorios sin marcar la billetera; resultados finales degradados requieren reparación conservadora.
+- Alcance: detección idempotente y herramienta administrativa explícita de diagnóstico/reparación, sin ejecutar sobre bases existentes.
+- Commit: `fix(migracion): [TFG-C12-BE-01] detectar conflictos históricos sin alterar asientos`.
+- Antes: claims previos duplicados no marcaban revisión. Ahora: backfill escanea todos los índices; la herramienta administrativa exige base explícita, inventario público fijado, diagnóstico por defecto y copia antes de reparar bajo transacción. Solo restaura un ACCEPTED degradado si firmas, alcance, digests, emisión, fecha y exactamente dos asientos coinciden. Conserva saldos/compromisos/clave y no limpia revisión de billetera.
+- Archivos: `migrations.py`, `tools/recover_final_payments.py`, `tools/backup_sqlite.py`, este registro. Verificación: AST Python; ninguna herramienta ni migración fue ejecutada sobre bases existentes. Interrupción de migración requiere diagnóstico desde copia coherente, nunca downgrade automático.
