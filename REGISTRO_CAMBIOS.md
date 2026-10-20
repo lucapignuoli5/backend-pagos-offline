@@ -733,3 +733,15 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Commit: `fix(pos): [TFG-C12-CO-02] recuperar resoluciones históricas sin mover saldos`.
 - Antes: filas finales previas podían carecer de resolución local. Ahora: SQLite 6→7 conserva estado de recuperación; GET v3 verifica firma y vínculos antes de adjuntar bytes en la fila final. Errores de red se reintentan, 404/prueba inválida se aíslan como atención; acción manual permite reintentar. No se reenvía el pago ni se mueven fondos.
 - Archivos: `pos_desktop/database.py`, `pos_desktop/backend_client.py`, `pos_desktop/sync.py`, `pos_desktop/ui.py`, `AGENTS.md`, `GUIA_PRUEBA_MANUAL.md`, este registro. Verificación: AST Python y diff; POS y migración real no ejecutados.
+
+## TFG-C13-BE-01 — Cierre de autorizaciones con rechazos definitivos
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Requisito: la preparación automática no debe quedar bloqueada por una operación rechazada cuyo índice sigue consumido y cuya reserva ya fue resuelta.
+- Alcance: admitir en el manifiesto únicamente rechazos finales respaldados y comprobar su total contra la liberación contable registrada; conservar el índice emitido y excluir ese importe del presupuesto no emitido.
+- Antes/ahora: el cierre excluía cualquier REJECTED; ahora admite un rechazo final solo con resolución emisora confiable vinculada a la evidencia y sin aplicación, asientos o emisión ACCEPTED contradictoria. El total rechazado debe igualar la liberación registrada, antes de liberar exclusivamente lo no emitido.
+- Decisión: conservar el índice consumido y los rechazos en el manifiesto; no reabrir pagos ni reparar historia ambigua automáticamente. Necesario para la renovación automática solicitada en C13.
+- Archivos: `api_v3.py`, `AGENTS.md`, este registro; consumidor Android `sync/OfflineAuthorizationCloser.kt` (TFG-C13-AN-02). Sin cambio de esquema, rutas ni campos firmados.
+- Verificación: revisión estática independiente y AST de `api_v3.py` correctos; diff sin errores. Sin pruebas, arranque, apertura de bases ni migraciones ejecutadas.
+- Límite: migración/historia y rechazo real con cierre permanecen pendientes de verificación manual; no se agrega un productor nuevo de rechazos ni se alteran contadores existentes.
+- Impacto académico: describe cierre automático conservador con índices permanentes y resolución final; no acredita corrección contable en ejecución.
+- Commit: `fix(cierre): [TFG-C13-BE-01] conservar rechazos definitivos en el manifiesto`.

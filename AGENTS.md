@@ -99,3 +99,9 @@ de código de forma incidental. Sin pruebas, compilación, instalación ni push.
 - El backfill detecta índices de emisión duplicados incluso si los claims ya existían. La herramienta `tools.recover_final_payments` diagnostica en solo lectura; una reparación explícita exige copia previa, mantiene asientos/saldos/compromisos y no limpia la marca de revisión de la billetera.
 - POS migra aditivamente 6→7 para recuperar resoluciones históricas mediante GET v3. El botón de conciliación permite reintentar evidencia marcada para atención; el estado financiero no se reabre.
 - `tools.backup_sqlite` crea una copia coherente a un destino nuevo con origen/destino explícitos. Detener backend/POS y copiar antes de abrir una base existente con código nuevo. No se ejecutó ninguna migración o reparación sobre datos existentes.
+
+## Cierre compatible con preparación automática C13 — 20/10/2026
+
+- Android solicita preparación/renovación automática con la sesión activa; el backend sigue exigiendo solicitud idempotente, saldo libre y cierre verificable. No emite autorizaciones por iniciativa propia.
+- El manifiesto admite REJECTED únicamente con resolución final emisora fijada, vínculos íntegros y ausencia de aplicación/asientos; el total rechazado debe coincidir con `released_rejected_cents`. No vuelve a liberar ese importe ni rehabilita su índice. Casos históricos ambiguos conservan compromisos y requieren revisión.
+- Sin cambios de esquema ni datos. C13 se revisa estáticamente y mediante sintaxis; no se ejecutan servidor, pruebas, migraciones ni servicios de pago.

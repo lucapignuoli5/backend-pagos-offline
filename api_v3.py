@@ -293,6 +293,7 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
             raise HTTPException(409, detail={"code": "ISSUANCE_INDEX_CONFLICT"})
         payment_by_operation = {payment.operation_id: payment for payment in payments}
         accepted_total = 0
+        rejected_total = 0
         for entry in entries:
             claim = claim_by_operation.get(entry["operation_id"])
             payment = payment_by_operation.get(entry["operation_id"])
@@ -344,6 +345,29 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
                     raise HTTPException(409, detail={"code": "ACK_REVOCATION_REVIEW"})
             if payment.state == "ACCEPTED":
                 accepted_total += payment.amount_cents
+            elif payment.state == "REJECTED":
+                resolution = db.get(models.PaymentResolution, payment.operation_id)
+                if resolution is None or resolution.status != "REJECTED":
+                    raise ValueError("rechazo sin resolucion definitiva")
+                result = parse_signed_envelope(bytes(resolution.resolution_envelope))
+                expected = {
+                    "type": "payment_resolution", "operation_status": "REJECTED",
+                    "operation_id": payment.operation_id, "wallet_id": payment.wallet_id,
+                    "merchant_id": payment.merchant_id, "terminal_id": payment.terminal_id,
+                    "amount_cents": payment.amount_cents, "currency": payment.currency,
+                    "offline_authorization_id": authorization_id,
+                    "authorization_digest": payload_digest(grant),
+                    "request_digest": payload_digest(request_envelope),
+                    "receipt_digest": payload_digest(receipt_envelope),
+                    "resolution_revision": resolution.revision, "code": payment.rejection_code,
+                }
+                if (any(result.payload.get(field) != value for field, value in expected.items())
+                        or not result.verify(issuer_public_key(result.payload))
+                        or payment.applied_at is not None
+                        or db.query(models.LedgerEntry).filter_by(operation_id=payment.operation_id).first() is not None
+                        or db.query(models.CommitmentEmission).filter_by(operation_id=payment.operation_id).first() is not None):
+                    raise ValueError("rechazo contradictorio con evidencia o contabilidad")
+                rejected_total += payment.amount_cents
             elif payment.state not in {"PENDING_EVIDENCE", "VALIDATED"}:
                 raise ValueError("operacion en revision; no se libera presupuesto")
         total_issued = sum(int(entry["amount_cents"]) for entry in entries)
@@ -352,8 +376,9 @@ def close_authorization_v3(authorization_id: str, request: schemas.OfflineAuthor
             - commitment.released_rejected_cents - commitment.released_unissued_cents
         )
         if (accepted_total != commitment.emitted_cents
+                or rejected_total != commitment.released_rejected_cents
                 or total_issued > commitment.reserved_cents
-                or total_issued < commitment.emitted_cents
+                or total_issued < commitment.emitted_cents + commitment.released_rejected_cents
                 or commitment.held_cents != expected_held_before_close
                 or commitment.released_unissued_cents != 0):
             raise ValueError("invariante contable del manifiesto")
