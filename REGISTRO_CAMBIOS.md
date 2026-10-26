@@ -754,3 +754,11 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivos: `AGENTS.md` y este registro.
 - Verificación: releídos estado backend `main`/`origin/main`, registro existente y alcance C14. No se arrancaron servicios ni se abrieron bases.
 - Asunto de commit: `docs(backend): [TFG-C14-BE-01] preparar continuidad del entorno de demostracion`.
+
+## TFG-C14-BE-02 — Centralizar contexto de continuidad fuera de AGENTS
+- Fecha: 2026-10-25. Estado: DOCUMENTADA / REVISIÓN ESTÁTICA.
+- Requisito: guardar el estado operativo móvil/backend y el siguiente ensayo en un archivo de contexto común, manteniendo AGENTS como instrucciones estables.
+- Decisión: crear `CONTEXTO_CONTINUACION_C14_WIFI_LOCAL.md` en la carpeta general y retirar de AGENTS el resumen temporal C14.
+- Archivos: `AGENTS.md`, registro backend y el contexto compartido fuera de los repositorios.
+- Verificación: el contexto documenta que C14 no altera backend y advierte sobre el entorno demo externo ligado a la máquina; diff sin errores. No se abrieron bases ni arrancaron servicios.
+- Asunto exacto: `docs(backend): [TFG-C14-BE-02] separar contexto de continuidad`.
