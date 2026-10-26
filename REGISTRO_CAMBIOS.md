@@ -745,3 +745,12 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Límite: migración/historia y rechazo real con cierre permanecen pendientes de verificación manual; no se agrega un productor nuevo de rechazos ni se alteran contadores existentes.
 - Impacto académico: describe cierre automático conservador con índices permanentes y resolución final; no acredita corrección contable en ejecución.
 - Commit: `fix(cierre): [TFG-C13-BE-01] conservar rechazos definitivos en el manifiesto`.
+
+## TFG-C14-BE-01 — Contexto de continuidad entre computadoras
+- Fecha: 2026-10-25. Estado: DOCUMENTADA / ESTADO LOCAL REVISADO.
+- Requisito: indicar en backend qué evidencia C14 afecta al cliente y cómo preparar una nueva estación sin asumir acceso a secretos locales.
+- Hallazgo: la excepción S24 pertenece a `WifiNetworkSpecifier` Android; no se halló causa ni requiere cambio backend. Las cuentas y claves demo externas están ligadas a la máquina donde se prepararon.
+- Decisión: dejar claro que backend no cambia en C14, que sus datos de demostración externos no son portables por defecto, y que la rama Android con commits C14 está solo local/no publicada.
+- Archivos: `AGENTS.md` y este registro.
+- Verificación: releídos estado backend `main`/`origin/main`, registro existente y alcance C14. No se arrancaron servicios ni se abrieron bases.
+- Asunto de commit: `docs(backend): [TFG-C14-BE-01] preparar continuidad del entorno de demostracion`.
