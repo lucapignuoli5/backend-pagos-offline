@@ -762,3 +762,14 @@ Las fases pueden cerrarse por implementación y revisión estática sin ejecutar
 - Archivos: `AGENTS.md`, registro backend y el contexto compartido fuera de los repositorios.
 - Verificación: el contexto documenta que C14 no altera backend y advierte sobre el entorno demo externo ligado a la máquina; diff sin errores. No se abrieron bases ni arrancaron servicios.
 - Asunto exacto: `docs(backend): [TFG-C14-BE-02] separar contexto de continuidad`.
+
+## TFG-C14-BE-03 — Arranque controlado de la demo
+- Fecha: 2026-10-27. Estado: IMPLEMENTADA / SINTAXIS REVISADA / VALIDACIÓN MANUAL PENDIENTE.
+- Alcance: launcher, dominio, autenticación local y procesos; conservar base y configuración existentes. No cambia contratos HTTP, esquema de datos ni contabilidad.
+- El dominio explícito, el dominio guardado o el hostname heredado se intentan exactamente, sin inferencia por sufijo ni reemplazo aleatorio si fallan. La URL y metadatos DPAPI solo se reemplazan tras abrir un túnel válido.
+- El token se mantiene en YAML externo con permisos Windows; se excluye de argumentos y entorno del backend. La salida nativa ngrok se descarta y se muestran errores sanitizados. `--configure-token` admite reemplazo mediante entrada oculta.
+- Bloqueos por backend/túnel, comprobación del proceso propio, supervisión y contención Job Object están diseñados para no detener instancias ajenas. Enter/Ctrl+C solicitan cierre ordenado; X y fallback forzado no garantizan cierre contable ordenado y requieren ensayo físico.
+- Se cerró el servidor que el agente había iniciado y se creó una copia SQLite coherente en un destino nuevo externo antes de usar el launcher actualizado; se conservaron base e identidades. No se inició ni probó el launcher nuevo.
+- Verificación: revisión estática independiente de la unidad y análisis AST de cuatro archivos sin importar la aplicación. Sin pruebas, simuladores ni pagos. El usuario ejecutará la guía manual.
+- Límite: bloqueo, ACL, manejo de consola y cierre del Job Object no están validados en ejecución Windows. La base existente no fue abierta por el backend actualizado.
+- Punto inicial: main en 6707089, dos commits sobre origin/main, registro y tools/run_demo.py previamente modificados, conservados.

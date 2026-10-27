@@ -4,7 +4,16 @@ Estado: correcciones programadas; funcionamiento pendiente de prueba manual.
 Durante esta entrega solo se permite compilar Android y revisar sintaxis Python.
 Los comandos de preparación y arranque siguientes los ejecuta el usuario.
 
-## Demostración ya preparada en esta PC — 14/10/2026
+## Continuidad de esta PC — C14, 27/10/2026
+
+- La demostración de esta PC está en `%USERPROFILE%\TFG-Demo-Manual`. Conservar su base, cuentas y configuración. No ejecutar `prepare_demo` sobre esa carpeta.
+- Antes de abrirla con el launcher actualizado, se cerró el servidor y se creó una copia coherente en `%USERPROFILE%\TFG-Demo-Backups\demo-antes-c14-20261027-134914.sqlite`. Para futuras copias, detener backend/POS y usar `tools.backup_sqlite` con un destino externo nuevo.
+- Abrir una sola vez `INICIAR_DEMO.cmd` de la carpeta demo y dejar la ventana abierta. El dominio fijo continúa siendo `unfailing-bless-thrift.ngrok-free.dev`; el APK debe apuntar a la misma URL.
+- El launcher conserva el token en la configuración ngrok local, con permisos del usuario Windows, sin imprimirlo ni incluirlo en argumentos del proceso. Si ngrok rechaza un token que debe reemplazarse, desde la raíz backend ejecutar `.\.venv313\Scripts\python.exe -m tools.run_demo start --directory "$env:USERPROFILE\TFG-Demo-Manual" --domain unfailing-bless-thrift.ngrok-free.dev --configure-token` e ingresarlo en la entrada oculta. El token no se escribe en el CMD.
+- Enter solicita cierre ordenado; un segundo launcher o un puerto ocupado debe mostrar un aviso sin cerrar procesos ajenos. La prueba manual de arranque, duplicados, Ctrl+C y cierre por X queda pendiente.
+- La revisión y la compilación no prueban recuperación de pagos, cierre de procesos ni compatibilidad física. La guía móvil de los ensayos está en `GUIA_QR_RED_LOCAL_C14.md`.
+
+## Demostración histórica en otra PC — 14/10/2026
 
 - Carpeta: `C:\Users\anita\TFG-Demo-Manual`.
 - Dominio: `https://unfailing-bless-thrift.ngrok-free.dev/`.
